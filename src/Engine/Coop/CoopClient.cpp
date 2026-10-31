@@ -87,7 +87,9 @@ void CoopClient::sendActorDamage(const CoopActorDamage &damage) {
     if (_state != COOP_CLIENT_JOINED)
         return;
 
-    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(damage));
+    CoopActorDamage message = damage;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
 }
 
 std::vector<CoopPartyHit> CoopClient::takePartyHits() {

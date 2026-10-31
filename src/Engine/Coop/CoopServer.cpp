@@ -96,6 +96,7 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (const CoopTravelRequest *request = std::get_if<CoopTravelRequest>(&message)) {
         startVote(_clients[peer].playerId, peer, request->destination);
     } else if (CoopActorDamage *damage = std::get_if<CoopActorDamage>(&message)) {
+        damage->playerId = _clients[peer].playerId;
         _actorDamage.push_back(std::move(*damage));
     } else if (const CoopTravelAnswer *answer = std::get_if<CoopTravelAnswer>(&message)) {
         if (_vote && _vote->id == answer->voteId) // Answers to a vote that has already ended are dropped.

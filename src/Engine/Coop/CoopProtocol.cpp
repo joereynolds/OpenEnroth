@@ -239,12 +239,14 @@ static void deserializeBody(InputStream &src, CoopActorStates *dst) {
 }
 
 static void serializeBody(const CoopActorDamage &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
     serialize(std::to_underlying(src.map), dst);
     serializeInt(src.index, dst);
     serializeInt(src.damage, dst);
 }
 
 static void deserializeBody(InputStream &src, CoopActorDamage *dst) {
+    dst->playerId = deserializeInt(src);
     dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
     dst->index = deserializeInt(src);
     dst->damage = deserializeInt(src);

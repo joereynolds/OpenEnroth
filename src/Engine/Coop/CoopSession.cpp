@@ -263,8 +263,11 @@ void CoopSession::applyActorDamage() {
         if (!actor.CanBeDamaged())
             continue;
         actor.hp -= damage.damage;
-        if (actor.hp <= 0)
+        if (actor.hp <= 0) {
             Actor::Die(damage.index); // No experience, the guest's game gave it to the guest's party.
+        } else if (auto standIn = _standIns.find(damage.playerId); standIn != _standIns.end()) {
+            Actor::AI_Pain(damage.index, Pid(OBJECT_Actor, standIn->second), 0);
+        }
     }
 }
 
@@ -328,7 +331,7 @@ void CoopSession::applyPartyHits() {
 
 void CoopSession::sendActorHits() {
     for (const ActorHit &hit : std::exchange(engine->_actorHitsForHost, {}))
-        _client->sendActorDamage(CoopActorDamage{engine->_currentLoadedMapId, hit.actorId, hit.damage});
+        _client->sendActorDamage(CoopActorDamage{.map = engine->_currentLoadedMapId, .index = hit.actorId, .damage = hit.damage});
 }
 
 CoopPartyPose CoopSession::localPose() {

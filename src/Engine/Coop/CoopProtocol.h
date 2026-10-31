@@ -106,6 +106,7 @@ struct CoopActorStates {
 
 /** Client to host, the client's party hurt a monster on the client's map. */
 struct CoopActorDamage {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
     MapId map = MAP_INVALID;
     int index = -1; // Index in the map's actor list.
     int damage = 0; // Already reduced by the monster's resistances.

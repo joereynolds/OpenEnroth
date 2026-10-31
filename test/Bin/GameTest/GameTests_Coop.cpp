@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <map>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -29,6 +31,10 @@
 #include "Utility/ScopeGuard.h"
 
 #include "GameTestCommon.h"
+
+static bool hasCoopStandIn() {
+    return std::ranges::any_of(pActors, [](const Actor &actor) { return actor.attributes & ACTOR_COOP_STAND_IN; });
+}
 
 static int remotePartyBillboardCount(const Vec3f &pos) {
     int result = 0;
@@ -519,12 +525,12 @@ GAME_TEST(Coop, GuestHitsHurtHostMonsters) {
     ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
     test.startTaping();
 
-    guest.sendActorDamage(CoopActorDamage{MAP_EMERALD_ISLAND, 0, 2});
+    guest.sendActorDamage(CoopActorDamage{.map = MAP_EMERALD_ISLAND, .index = 0, .damage = 2});
     for (int i = 0; i < 100 && pActors[0].hp == pActors[0].monsterInfo.hp; i++) { // The guest sends what it queued only when updated.
         guest.update();
         game.tick();
     }
-    guest.sendActorDamage(CoopActorDamage{MAP_EMERALD_ISLAND, 0, 100});
+    guest.sendActorDamage(CoopActorDamage{.map = MAP_EMERALD_ISLAND, .index = 0, .damage = 100});
     for (int i = 0; i < 100 && pActors[0].aiState != Dying; i++) {
         guest.update();
         game.tick();
@@ -683,4 +689,48 @@ GAME_TEST(Coop, GuestTakesMonsterHits) {
     }
 
     EXPECT_LT(hpTape.delta(), 0);
+}
+
+GAME_TEST(Coop, WoundedMonsterTurnsToGuest) {
+    // A monster a guest wounds from beyond its sight reacts to the guest the way it would to the host's party, it
+    // flinches and turns to face the guest. The same monster left alone does neither.
+    for (bool wound : {false, true}) {
+        SCOPED_TRACE(fmt::format("wound={}", wound));
+        test.prepareForNextTest();
+        engine->config->debug.NoActors.setValue(true);
+        game.startNewGame();
+        prepareForBattleTest();
+        engine->config->debug.NoActors.setValue(false);
+        Vec3f guestPos(12600, 20224, 0); // On the shore, far from the host at the bridge.
+        int goblin = game.spawnMonster(guestPos + Vec3f(0, -6000, 0), MONSTER_GOBLIN_A)->id;
+        auto stateTape = actorTapes.aiState(goblin);
+        coopSession = CoopSession::host(0, 4);
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+        CoopPartyPose pose;
+        pose.map = MAP_EMERALD_ISLAND;
+        pose.pos = guestPos;
+        for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+        for (int i = 0; i < 100 && !hasCoopStandIn(); i++) {
+            guest.sendLocalPose(pose);
+            guest.update();
+            game.tick();
+        }
+        test.startTaping();
+
+        if (wound)
+            guest.sendActorDamage(CoopActorDamage{.map = MAP_EMERALD_ISLAND, .index = goblin, .damage = 1});
+        guest.update();
+        game.tick();
+
+        float yaw = pActors[goblin].yawAngle * 2 * std::numbers::pi_v<float> / 2048; // A full turn is 2048.
+        Vec2f toGuest = (guestPos - pActors[goblin].pos).xy();
+        bool facesGuest = dot(Vec2f(std::cos(yaw), std::sin(yaw)), toGuest) > toGuest.length() * std::cos(std::numbers::pi_v<float> / 8);
+        EXPECT_EQ(stateTape.contains(InPain), wound);
+        EXPECT_EQ(facesGuest, wound);
+    }
 }

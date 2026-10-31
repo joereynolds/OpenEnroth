@@ -175,13 +175,15 @@ UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
 }
 
 UNIT_TEST(CoopProtocol, ActorDamageRoundTrip) {
-    // Actor damage keeps the map, the actor and the amount.
+    // Actor damage keeps the player, the map, the actor and the amount.
     CoopActorDamage damage;
+    damage.playerId = 2;
     damage.map = MAP_DEYJA;
     damage.index = 9;
     damage.damage = 123;
 
     CoopActorDamage decoded = roundTrip(damage);
+    EXPECT_EQ(decoded.playerId, 2);
     EXPECT_EQ(decoded.map, MAP_DEYJA);
     EXPECT_EQ(decoded.index, 9);
     EXPECT_EQ(decoded.damage, 123);
