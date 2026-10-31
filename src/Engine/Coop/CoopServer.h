@@ -94,6 +94,18 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopQuestBit> takeQuestBits();
 
     /**
+     * Sends quest rewards to every client except the one whose game gave them out.
+     *
+     * @param rewards                   The rewards, with the id of the player whose game gave them out.
+     */
+    void sendQuestRewards(const CoopQuestRewards &rewards);
+
+    /**
+     * @return                          Quest rewards clients sent since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopQuestRewards> takeQuestRewards();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -180,4 +192,5 @@ class CoopServer {
     std::vector<CoopActorDamage> _actorDamage;
     std::vector<CoopLootRequest> _lootRequests;
     std::vector<CoopQuestBit> _questBits;
+    std::vector<CoopQuestRewards> _questRewards;
 };

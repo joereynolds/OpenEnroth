@@ -326,6 +326,29 @@ static void deserializeBody(InputStream &src, CoopQuestBit *dst) {
     dst->value = deserializeBool(src);
 }
 
+static void serializeBody(const CoopQuestRewards &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serializeInt(src.rewards.size(), dst);
+    for (const QuestReward &reward : src.rewards) {
+        serializeInt(std::to_underlying(reward.variable), dst);
+        serializeInt(reward.value, dst);
+        serializeInt(reward.characterIndex, dst);
+    }
+}
+
+static void deserializeBody(InputStream &src, CoopQuestRewards *dst) {
+    dst->playerId = deserializeInt(src);
+    int count = deserializeInt(src);
+    if (count < 0 || count > static_cast<int>(src.size() - src.position()))
+        throw Exception("Coop quest rewards claim {} rewards, but only {} bytes are left", count, src.size() - src.position());
+    dst->rewards.resize(count);
+    for (QuestReward &reward : dst->rewards) {
+        reward.variable = static_cast<EvtVariable>(deserializeInt(src));
+        reward.value = deserializeInt(src);
+        reward.characterIndex = deserializeInt(src);
+    }
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

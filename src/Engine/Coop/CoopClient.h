@@ -113,6 +113,18 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopQuestBit> takeQuestBits();
 
     /**
+     * Tells the host what this client's game gave out for a quest. Does nothing until joined.
+     *
+     * @param rewards                   The rewards.
+     */
+    void sendQuestRewards(const CoopQuestRewards &rewards);
+
+    /**
+     * @return                          Quest rewards from the other players since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopQuestRewards> takeQuestRewards();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -178,4 +190,5 @@ class CoopClient {
     std::vector<CoopPartyHit> _partyHits;
     std::vector<CoopLoot> _loot;
     std::vector<CoopQuestBit> _questBits;
+    std::vector<CoopQuestRewards> _questRewards;
 };

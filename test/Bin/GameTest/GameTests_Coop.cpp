@@ -904,3 +904,71 @@ GAME_TEST(Coop, GuestQuestProgressReachesHost) {
     EXPECT_EQ(changes[0].bit, QBIT_TALKED_TO_ROLAND);
     EXPECT_TRUE(changes[0].value);
 }
+
+GAME_TEST(Coop, QuestRewardsAreShared) {
+    // What one guest's game gives out for a quest, the host's party and the other guests get too.
+    auto keyTape = tapes.totalItemCount(ITEM_COLONY_ZOD_KEY);
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient talker("127.0.0.1", coopSession->server()->port(), "Talker");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (talker.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        talker.update();
+        other.update();
+    }
+    ASSERT_EQ(talker.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the inventory before the reward.
+
+    CoopQuestRewards rewards;
+    rewards.rewards = {QuestReward{VAR_PlayerItemInHands, std::to_underlying(ITEM_COLONY_ZOD_KEY), 0}};
+    talker.sendQuestRewards(rewards);
+    std::vector<CoopQuestRewards> relayed;
+    for (int i = 0; i < 100 && relayed.empty(); i++) { // The talker sends what it queued only when updated.
+        talker.update();
+        game.tick();
+        other.update();
+        relayed = other.takeQuestRewards();
+    }
+
+    EXPECT_EQ(keyTape, tape(0, 1));
+    ASSERT_EQ(relayed.size(), 1);
+    ASSERT_EQ(relayed[0].rewards.size(), 1);
+    EXPECT_EQ(relayed[0].rewards[0].value, std::to_underlying(ITEM_COLONY_ZOD_KEY));
+}
+
+GAME_TEST(Coop, GuestQuestRewardsReachHost) {
+    // Roland hands over his key in the same script that marks him as talked to, so the key counts as a quest reward
+    // and goes to the host too.
+    game.startNewGame();
+    game.teleportTo(MAP_COLONY_ZOD, Vec3f(-10986, 8576, 1728), 180); // On the ledge east of the hanging cage, facing it.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    test.startTaping();
+
+    game.pointMouseAtDecoration(1); // Roland's cage.
+    game.pressAndReleaseButton(BUTTON_LEFT);
+    game.tick(3);
+    std::vector<CoopQuestRewards> rewards;
+    for (int i = 0; i < 100 && rewards.empty(); i++) {
+        server.update();
+        rewards = server.takeQuestRewards();
+        game.tick();
+    }
+
+    ASSERT_EQ(rewards.size(), 1);
+    ASSERT_EQ(rewards[0].rewards.size(), 1);
+    EXPECT_EQ(rewards[0].rewards[0].variable, VAR_PlayerItemInHands);
+    EXPECT_EQ(rewards[0].rewards[0].value, std::to_underlying(ITEM_COLONY_ZOD_KEY));
+}

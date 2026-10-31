@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "Engine/CoopEvents.h"
 #include "Engine/Evt/EvtContext.h"
 #include "Engine/Evt/EvtContinuation.h"
 #include "Engine/Evt/EvtInstruction.h"
@@ -100,12 +101,20 @@ class EvtInterpreter {
       */
      [[nodiscard]] const EvtInstruction *instructionAt(int step) const;
 
+     /**
+      * Passes the rewards collected during a run on to the co-op session, if the run changed a quest bit.
+      *
+      * @param questBitChangesBefore    Number of recorded quest bit changes when the run started.
+      */
+     void finishRun(size_t questBitChangesBefore);
+
  private:
      EvtContext _context;
      std::vector<EvtInstruction> _events;
      bool _canShowTopic = true;
      EvtTransition _transition = EVT_TRANSITION_NONE;
      EvtTargetCharacter _who = CHOOSE_PARTY;
+     std::vector<QuestReward> _rewards; // Co-op, what this run gave out so far.
 };
 
 void spawnMonsters(int16_t typeindex, int16_t level, int count,

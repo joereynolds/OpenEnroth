@@ -76,6 +76,17 @@ std::vector<CoopQuestBit> CoopServer::takeQuestBits() {
     return std::exchange(_questBits, {});
 }
 
+void CoopServer::sendQuestRewards(const CoopQuestRewards &rewards) {
+    Blob data = encodeCoopMessage(rewards);
+    for (const auto &[peer, client] : _clients)
+        if (client.playerId != -1 && client.playerId != rewards.playerId)
+            _net->send(peer, NET_CHANNEL_RELIABLE, data);
+}
+
+std::vector<CoopQuestRewards> CoopServer::takeQuestRewards() {
+    return std::exchange(_questRewards, {});
+}
+
 void CoopServer::sendLoot(int playerId, const CoopLoot &loot) {
     for (const auto &[peer, client] : _clients)
         if (client.playerId == playerId)
@@ -122,6 +133,9 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopQuestBit *change = std::get_if<CoopQuestBit>(&message)) {
         change->playerId = _clients[peer].playerId;
         _questBits.push_back(*change);
+    } else if (CoopQuestRewards *rewards = std::get_if<CoopQuestRewards>(&message)) {
+        rewards->playerId = _clients[peer].playerId;
+        _questRewards.push_back(std::move(*rewards));
     } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
         request->playerId = _clients[peer].playerId;
         _lootRequests.push_back(std::move(*request));

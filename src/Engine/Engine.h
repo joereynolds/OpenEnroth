@@ -10,7 +10,7 @@
 
 #include "Engine/Evt/EvtProgram.h"
 #include "Engine/MapEnums.h"
-#include "Engine/ActorHit.h"
+#include "Engine/CoopEvents.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/RemoteParty.h"
 #include "Engine/mm7_data.h"
@@ -161,6 +161,7 @@ class Engine {
     std::vector<int> _lootRequestsForHost; // Co-op guest, corpses the local party wants to loot, the host decides who gets what.
     bool _coopSessionActive = false; // A co-op game is running, local changes to the shared world are recorded for the others.
     std::vector<QuestBitChange> _questBitChanges; // Co-op, quest bits the local party's scripts changed.
+    std::vector<QuestReward> _questRewards; // Co-op, what the local party's scripts gave out for quests.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

@@ -5,6 +5,7 @@
 #include <variant>
 #include <vector>
 
+#include "Engine/CoopEvents.h"
 #include "Engine/MapEnums.h"
 #include "Engine/PartyEnums.h"
 #include "Engine/PartyPlacement.h"
@@ -143,10 +144,16 @@ struct CoopQuestBit {
     bool value = false;
 };
 
+/** What one player's game gave out for a quest, everyone gets it. Relayed like `CoopQuestBit`. */
+struct CoopQuestRewards {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    std::vector<QuestReward> rewards;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
-                                 CoopQuestBit>;
+                                 CoopQuestBit, CoopQuestRewards>;
 
 /**
  * @param message                       Message to encode.

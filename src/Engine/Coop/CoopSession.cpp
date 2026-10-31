@@ -13,6 +13,7 @@
 #include "Engine/Party.h"
 #include "Engine/SaveLoad.h"
 #include "Engine/Timer.h"
+#include "Engine/Evt/EvtVariables.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Objects/Actor.h"
 #include "Engine/Objects/Character.h"
@@ -48,6 +49,7 @@ CoopSession::~CoopSession() {
     engine->_lootRequestsForHost.clear();
     engine->_coopSessionActive = false;
     engine->_questBitChanges.clear();
+    engine->_questRewards.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -113,6 +115,7 @@ void CoopSession::update() {
     }
 
     syncQuestBits();
+    syncQuestRewards();
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
     if (decision)
@@ -398,6 +401,28 @@ void CoopSession::syncQuestBits() {
         applyQuestBit(change);
         if (_server)
             _server->sendQuestBit(change);
+    }
+}
+
+void CoopSession::syncQuestRewards() {
+    std::vector<QuestReward> local = std::exchange(engine->_questRewards, {});
+    if (!local.empty()) {
+        CoopQuestRewards rewards{.rewards = std::move(local)};
+        if (_server) {
+            rewards.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendQuestRewards(rewards);
+        } else {
+            _client->sendQuestRewards(rewards);
+        }
+    }
+
+    std::vector<CoopQuestRewards> remote = _server ? _server->takeQuestRewards() : _client->takeQuestRewards();
+    for (const CoopQuestRewards &rewards : remote) {
+        for (const QuestReward &reward : rewards.rewards)
+            if (reward.characterIndex >= 0 && reward.characterIndex < std::ssize(pParty->pCharacters))
+                addEvtVariable(pParty->pCharacters[reward.characterIndex], reward.variable, reward.value);
+        if (_server)
+            _server->sendQuestRewards(rewards);
     }
 }
 

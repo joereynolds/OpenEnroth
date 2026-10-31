@@ -24,12 +24,12 @@ set(ENGINE_SOURCES
         Seasons.cpp)
 
 set(ENGINE_HEADERS
-        ActorHit.h
         ArenaEnumFunctions.h
         ArenaEnums.h
         AssetsManager.h
         AttackList.h
         Conditions.h
+        CoopEvents.h
         Engine.h
         EngineCallObserver.h
         EngineEnums.h

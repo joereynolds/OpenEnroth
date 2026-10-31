@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/PartyEnums.h"
+#include "Engine/Evt/EvtEnums.h"
 #include "Engine/Objects/ActorEnums.h"
 
 /**
@@ -26,4 +27,13 @@ struct StandInHit {
 struct QuestBitChange {
     QuestBit bit = QBIT_INVALID;
     bool value = false;
+};
+
+/**
+ * Something a script gave one of the local party's characters in the same run that changed a quest bit.
+ */
+struct QuestReward {
+    EvtVariable variable = VAR_FixedGold;
+    int value = 0;
+    int characterIndex = 0;
 };

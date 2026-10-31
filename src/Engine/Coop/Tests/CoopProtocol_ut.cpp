@@ -247,6 +247,23 @@ UNIT_TEST(CoopProtocol, QuestBitRoundTrip) {
     EXPECT_TRUE(decoded.value);
 }
 
+UNIT_TEST(CoopProtocol, QuestRewardsRoundTrip) {
+    // Quest rewards keep the player and every reward with its character.
+    CoopQuestRewards rewards;
+    rewards.playerId = 2;
+    rewards.rewards = {QuestReward{VAR_FixedGold, 1500, 0}, QuestReward{VAR_Experience, 7500, 3}};
+
+    CoopQuestRewards decoded = roundTrip(rewards);
+    EXPECT_EQ(decoded.playerId, 2);
+    ASSERT_EQ(decoded.rewards.size(), 2);
+    EXPECT_EQ(decoded.rewards[0].variable, VAR_FixedGold);
+    EXPECT_EQ(decoded.rewards[0].value, 1500);
+    EXPECT_EQ(decoded.rewards[0].characterIndex, 0);
+    EXPECT_EQ(decoded.rewards[1].variable, VAR_Experience);
+    EXPECT_EQ(decoded.rewards[1].value, 7500);
+    EXPECT_EQ(decoded.rewards[1].characterIndex, 3);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);
