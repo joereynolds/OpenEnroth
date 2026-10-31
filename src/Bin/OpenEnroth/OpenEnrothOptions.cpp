@@ -77,6 +77,10 @@ OpenEnrothOptions OpenEnrothOptions::parse(int argc, char **argv) {
     app->add_option(
         "--name", result.coop.playerName,
         "Name to show to the other co-op players, default is 'Player'.")->option_text("NAME");
+    app->add_option(
+        "--party", result.coop.partySave,
+        "Save file from the saves folder whose party joins the co-op game, e.g. 'save000.mm7'. "
+        "Without it, a joining player plays a copy of the host's party.")->option_text("SAVE");
     app->set_help_flag("-h,--help", "Print help and exit.");
 
     CLI::App *play = app->add_subcommand("play", "Play provided traces.", result.subcommand, SUBCOMMAND_PLAY)->fallthrough();
@@ -105,6 +109,8 @@ OpenEnrothOptions OpenEnrothOptions::parse(int argc, char **argv) {
         result.coop.playerName = "Player";
     if (result.coop.hostPort && !result.coop.joinAddress.empty())
         throw Exception("Can't both host and join a co-op game.");
+    if (!result.coop.partySave.empty() && result.coop.joinAddress.empty())
+        throw Exception("A party can only be brought along when joining a co-op game.");
 
     if (!portable && fs::exists(".portable"))
         portable = true;

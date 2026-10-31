@@ -8,6 +8,8 @@
 
 #include "Library/Geometry/Vec.h"
 
+#include "Utility/Memory/Blob.h"
+
 #include "CoopProtocol.h"
 
 class CoopClient;
@@ -33,11 +35,14 @@ class CoopSession {
      * @param address                   Host name or IP address of the host.
      * @param port                      Port the host is listening on.
      * @param playerName                Name to show to the other players.
+     * @param guestSave                 One of the guest's own saves, its party joins the host's world. Empty to
+     *                                  play with a copy of the host's party.
      * @return                          Client session that has started connecting. Drive `client()` until it has
      *                                  joined, then load the save it received before calling `update`.
      * @throws Exception                If the address couldn't be resolved.
      */
-    [[nodiscard]] static std::unique_ptr<CoopSession> join(std::string_view address, int port, std::string_view playerName);
+    [[nodiscard]] static std::unique_ptr<CoopSession> join(std::string_view address, int port, std::string_view playerName,
+                                                           Blob guestSave);
 
     /**
      * @return                          Server of a host session, `nullptr` for a client session.
@@ -52,6 +57,12 @@ class CoopSession {
     [[nodiscard]] CoopClient *client() const {
         return _client.get();
     }
+
+    /**
+     * @return                          Save to load on the guest's side once joined, the host's world with the guest's
+     *                                  party if there is one. Empty until joined.
+     */
+    [[nodiscard]] Blob takeJoinedSave();
 
     /**
      * Processes network events, sends the local party's pose if needed, and refreshes `Engine::_remoteParties`.
@@ -69,6 +80,7 @@ class CoopSession {
  private:
     std::unique_ptr<CoopServer> _server;
     std::unique_ptr<CoopClient> _client;
+    Blob _guestSave;
     std::optional<Vec3f> _lastFramePos;
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;

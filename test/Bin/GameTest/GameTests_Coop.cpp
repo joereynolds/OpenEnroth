@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "Testing/Game/GameTest.h"
 
 #include "Engine/Engine.h"
@@ -103,7 +105,7 @@ GAME_TEST(Coop, ClientJoinsFromMainMenu) {
     game.goToMainMenu();
     test.startTaping();
 
-    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest");
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
     MM_AT_SCOPE_EXIT(coopSession.reset());
     for (int i = 0; i < 100 && engine->_currentLoadedMapId != MAP_HARMONDALE; i++) { // Loopback, but ENet's handshake takes a few round trips.
         server.update();
@@ -121,4 +123,37 @@ GAME_TEST(Coop, ClientJoinsFromMainMenu) {
     ASSERT_EQ(server.remoteParties().size(), 1);
     EXPECT_EQ(server.remoteParties().begin()->second.map, MAP_HARMONDALE);
     EXPECT_EQ(server.remoteParties().begin()->second.pos, pParty->pos);
+}
+
+GAME_TEST(Coop, ClientJoinsWithOwnParty) {
+    // A client that brings its own save plays its own characters in the host's world, with its buffs keeping their
+    // remaining time on the host's clock.
+    auto mapTape = tapes.map();
+    game.startNewGame();
+    pParty->pCharacters[0].name = "Guestina";
+    pParty->SetGold(1234);
+    pParty->pCharacters[0].pCharacterBuffs[CHARACTER_BUFF_BLESS].expireTime = pParty->GetPlayingTime() + Duration::fromHours(1);
+    Blob guestSave = createSaveData(false, "Guest").second;
+
+    game.restAndHeal(); // Puts the host's clock hours ahead of the guest's.
+    game.teleportTo(MAP_HARMONDALE, Vec3f(-17331, 12547, 465), 90);
+    pParty->SetGold(5);
+    Time hostTime = pParty->GetPlayingTime();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.teleportTo(MAP_EMERALD_ISLAND, Vec3f(12552, 800, 193), 90);
+    game.goToMainMenu();
+    test.startTaping();
+
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", std::move(guestSave));
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && engine->_currentLoadedMapId != MAP_HARMONDALE; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(mapTape, tape(MAP_EMERALD_ISLAND, MAP_HARMONDALE));
+    EXPECT_EQ(pParty->pCharacters[0].name, "Guestina");
+    EXPECT_EQ(pParty->GetGold(), 1234);
+    EXPECT_EQ(pParty->pCharacters[0].pCharacterBuffs[CHARACTER_BUFF_BLESS].expireTime, hostTime + Duration::fromHours(1));
 }

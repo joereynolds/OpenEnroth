@@ -32,7 +32,7 @@ FsmAction CoopJoinState::update() {
         return FsmAction::none();
     case COOP_CLIENT_JOINED: {
         std::string fileName = COOP_SAVE_FILE_NAME;
-        ufs->write(fmt::format("saves/{}", fileName), client->takeSaveGame());
+        ufs->write(fmt::format("saves/{}", fileName), coopSession->takeJoinedSave());
         engine->_pendingLoadFileName = fileName;
         SetCurrentMenuID(MENU_LoadingProcInMainMenu);
         return FsmAction::transition("joined");

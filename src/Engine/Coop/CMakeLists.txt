@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
 
 set(ENGINE_COOP_SOURCES
         CoopClient.cpp
+        CoopGuestSave.cpp
         CoopProtocol.cpp
         CoopServer.cpp
         CoopSession.cpp)
@@ -9,6 +10,7 @@ set(ENGINE_COOP_SOURCES
 set(ENGINE_COOP_HEADERS
         CoopClient.h
         CoopEnums.h
+        CoopGuestSave.h
         CoopProtocol.h
         CoopServer.h
         CoopSession.h)

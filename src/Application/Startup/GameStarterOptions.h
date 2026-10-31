@@ -12,6 +12,7 @@ struct CoopOptions {
     std::string joinAddress; // Join the co-op game hosted at this address, empty for none.
     int joinPort = 0;
     std::string playerName; // Name shown to the other co-op players.
+    std::string partySave; // Save file in the saves folder whose party joins the host's world, empty for none.
 };
 
 struct GameStarterOptions {

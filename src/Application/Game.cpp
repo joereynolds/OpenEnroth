@@ -27,6 +27,7 @@
 #include "Engine/Graphics/Lighting.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
 #include "Engine/Objects/Decoration.h"
+#include "Engine/Resources/EngineFileSystem.h"
 #include "Engine/Graphics/Outdoor.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Graphics/Overlays.h"
@@ -132,7 +133,10 @@ int Game::run() {
 
     if (!_coopOptions.joinAddress.empty()) {
         try {
-            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName);
+            Blob guestSave;
+            if (!_coopOptions.partySave.empty())
+                guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", _coopOptions.partySave)));
+            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName, std::move(guestSave));
         } catch (const std::exception &e) {
             MM_ERROR("Could not join co-op game at '{}:{}': {}", _coopOptions.joinAddress, _coopOptions.joinPort, e.what());
         }
