@@ -41,6 +41,7 @@ CoopSession::~CoopSession() {
     engine->_actorsFollowHost = false;
     engine->_actorHitsForHost.clear();
     engine->_standInHits.clear();
+    engine->_lootRequestsForHost.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -93,13 +94,16 @@ void CoopSession::update() {
 
     if (_server) {
         applyActorDamage();
+        handOutLoot();
         sendStandInHits();
         updateStandIns();
         sendActorStates();
     } else {
         sendActorHits();
+        sendLootRequests();
         applyActorStates();
         applyPartyHits();
+        applyLoot();
     }
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
@@ -307,6 +311,58 @@ void CoopSession::updateStandIns() {
         actor.sectorId = uCurrentlyLoadedLevelType == LEVEL_INDOOR ? pIndoor->GetSector(pose.pos) : 0;
         actor.aiState = Standing;
         actor.hp = actor.monsterInfo.hp; // Stand-ins never die, what they're hit with is the guest's to take.
+    }
+}
+
+/**
+ * Collects loot for a co-op guest instead of giving it to the local party.
+ */
+class GuestLootReceiver : public LootReceiver {
+ public:
+    virtual void receiveGold(int gold) override {
+        loot.gold += gold;
+    }
+
+    virtual void receiveFoundItem(int gold, const Item &item) override {
+        loot.foundItem = item;
+    }
+
+    virtual bool receiveExtraItem(const Item &item) override {
+        loot.extraItems.push_back(item);
+        return true; // The guest's inventory is out of reach, the guest's game puts what doesn't fit on the cursor.
+    }
+
+    CoopLoot loot;
+};
+
+void CoopSession::handOutLoot() {
+    for (const CoopLootRequest &request : _server->takeLootRequests()) {
+        if (request.map != engine->_currentLoadedMapId || request.index < 0 || request.index >= std::ssize(pActors))
+            continue;
+        if (pActors[request.index].aiState != Dead)
+            continue; // Someone else got here first.
+
+        GuestLootReceiver receiver;
+        pActors[request.index].lootInto(&receiver);
+        _server->sendLoot(request.playerId, receiver.loot);
+    }
+}
+
+void CoopSession::sendLootRequests() {
+    for (int index : std::exchange(engine->_lootRequestsForHost, {}))
+        _client->sendLootRequest(CoopLootRequest{.map = engine->_currentLoadedMapId, .index = index});
+}
+
+void CoopSession::applyLoot() {
+    for (const CoopLoot &loot : _client->takeLoot()) {
+        pParty->placeHeldItemInInventoryOrDrop();
+        PartyLootReceiver receiver;
+        if (loot.gold)
+            receiver.receiveGold(loot.gold);
+        if (loot.foundItem)
+            receiver.receiveFoundItem(loot.gold, *loot.foundItem);
+        for (const Item &item : loot.extraItems)
+            receiver.receiveExtraItem(item);
     }
 }
 

@@ -202,6 +202,38 @@ UNIT_TEST(CoopProtocol, PartyHitRoundTrip) {
     EXPECT_EQ(decoded.ability, ABILITY_SPELL2);
 }
 
+UNIT_TEST(CoopProtocol, LootRequestRoundTrip) {
+    // A loot request keeps the player, the map and the corpse.
+    CoopLootRequest request;
+    request.playerId = 3;
+    request.map = MAP_HARMONDALE;
+    request.index = 21;
+
+    CoopLootRequest decoded = roundTrip(request);
+    EXPECT_EQ(decoded.playerId, 3);
+    EXPECT_EQ(decoded.map, MAP_HARMONDALE);
+    EXPECT_EQ(decoded.index, 21);
+}
+
+UNIT_TEST(CoopProtocol, LootRoundTrip) {
+    // Loot keeps its gold and its items, enchantments included.
+    CoopLoot loot;
+    loot.gold = 57;
+    loot.foundItem = Item(ITEM_KEEN_LONGSWORD);
+    loot.foundItem->standardEnchantment = ATTRIBUTE_MIGHT;
+    loot.foundItem->standardEnchantmentStrength = 5;
+    loot.extraItems = {Item(ITEM_POTION_CURE_WOUNDS)};
+
+    CoopLoot decoded = roundTrip(loot);
+    EXPECT_EQ(decoded.gold, 57);
+    ASSERT_TRUE(decoded.foundItem);
+    EXPECT_EQ(decoded.foundItem->itemId, ITEM_KEEN_LONGSWORD);
+    EXPECT_EQ(decoded.foundItem->standardEnchantment, ATTRIBUTE_MIGHT);
+    EXPECT_EQ(decoded.foundItem->standardEnchantmentStrength, 5);
+    ASSERT_EQ(decoded.extraItems.size(), 1);
+    EXPECT_EQ(decoded.extraItems[0].itemId, ITEM_POTION_CURE_WOUNDS);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

@@ -113,6 +113,9 @@ class CoopSession {
     void updateStandIns();
     void sendStandInHits();
     void applyPartyHits();
+    void handOutLoot();
+    void sendLootRequests();
+    void applyLoot();
     void sendActorHits();
 
  private:

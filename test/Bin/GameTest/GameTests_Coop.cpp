@@ -734,3 +734,105 @@ GAME_TEST(Coop, WoundedMonsterTurnsToGuest) {
         EXPECT_EQ(facesGuest, wound);
     }
 }
+
+GAME_TEST(Coop, CorpseLootGoesToFirstAsker) {
+    // The host hands a corpse's loot to the guest who asks for it, not to the host's party, and only once.
+    auto hostGoldTape = tapes.gold();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    Character &shooter = pParty->pCharacters[0];
+    shooter.inventory.equip(ITEM_SLOT_MAIN_HAND, Item(ITEM_BLASTER));
+    shooter.setSkillValue(SKILL_BLASTER, CombinedSkillValue(10, MASTERY_GRANDMASTER));
+    int rat = game.spawnMonster(pParty->pos + Vec3f(0, 80, 0), MONSTER_RAT_A, SPAWN_DUMMY)->id; // Right in front of the party.
+    game.pressAndReleaseKey(PlatformKey::KEY_A);
+    for (int i = 0; i < 100 && pActors[rat].aiState != Dead; i++) // The rat goes through its death animation.
+        game.tick();
+    ASSERT_EQ(pActors[rat].aiState, Dead);
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+
+    std::vector<CoopLoot> loot;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        guest.sendLootRequest(CoopLootRequest{.map = MAP_EMERALD_ISLAND, .index = rat});
+        for (int i = 0; i < 20; i++) { // A fixed wait, the second request is the one that must go unanswered.
+            guest.update();
+            game.tick();
+            for (CoopLoot &found : guest.takeLoot())
+                loot.push_back(std::move(found));
+        }
+    }
+
+    EXPECT_EQ(loot.size(), 1);
+    EXPECT_EQ(pActors[rat].aiState, Removed);
+    EXPECT_EQ(hostGoldTape.size(), 1);
+}
+
+GAME_TEST(Coop, GuestLootComesFromHost) {
+    // A guest looting a corpse asks the host, and gets what the host hands out.
+    auto goldTape = tapes.gold();
+    auto potionTape = tapes.totalItemCount(ITEM_POTION_CURE_WOUNDS);
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int rat = game.spawnMonster(pParty->pos + Vec3f(0, 80, 0), MONSTER_RAT_A, SPAWN_DUMMY)->id; // Right in front of the party.
+    CoopActorStates states;
+    states.map = MAP_EMERALD_ISLAND;
+    states.actorCount = pActors.size();
+    CoopActorState dead;
+    dead.index = rat;
+    dead.monster = MONSTER_RAT_A;
+    dead.pos = pActors[rat].pos;
+    dead.aiState = Dead;
+    dead.animation = ANIM_Dead;
+    states.actors = {dead};
+    server.sendActorStates(states);
+    for (int i = 0; i < 100 && pActors[rat].aiState != Dead; i++) {
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(pActors[rat].aiState, Dead);
+    test.startTaping();
+
+    game.pressAndReleaseKey(PlatformKey::KEY_SPACE);
+    game.tick();
+    std::vector<CoopLootRequest> requests;
+    for (int i = 0; i < 100 && requests.empty(); i++) {
+        server.update();
+        requests = server.takeLootRequests();
+        game.tick();
+    }
+    ASSERT_EQ(requests.size(), 1);
+    EXPECT_EQ(requests[0].index, rat);
+
+    CoopLoot loot;
+    loot.gold = 37;
+    loot.foundItem = Item(ITEM_POTION_CURE_WOUNDS);
+    server.sendLoot(requests[0].playerId, loot);
+    for (int i = 0; i < 100 && potionTape.back() == potionTape.front(); i++) {
+        server.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(goldTape.delta(), 37);
+    EXPECT_EQ(potionTape.delta(), 1);
+}

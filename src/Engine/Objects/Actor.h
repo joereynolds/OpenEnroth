@@ -51,6 +51,41 @@ struct ActorJob {
 
 class GUIWindow;
 
+/**
+ * Where the gold and items looted from a corpse go.
+ */
+class LootReceiver {
+ public:
+    virtual ~LootReceiver() = default;
+
+    /**
+     * @param gold                      Gold found on the corpse.
+     */
+    virtual void receiveGold(int gold) = 0;
+
+    /**
+     * @param gold                      Gold found together with the item, the status line mentions both.
+     * @param item                      The corpse's main find.
+     */
+    virtual void receiveFoundItem(int gold, const Item &item) = 0;
+
+    /**
+     * @param item                      Another item the corpse had.
+     * @return                          Whether the item went into the inventory rather than onto the cursor.
+     */
+    virtual bool receiveExtraItem(const Item &item) = 0;
+};
+
+/**
+ * Gives looted gold and items to the local party.
+ */
+class PartyLootReceiver : public LootReceiver {
+ public:
+    virtual void receiveGold(int gold) override;
+    virtual void receiveFoundItem(int gold, const Item &item) override;
+    virtual bool receiveExtraItem(const Item &item) override;
+};
+
 class Actor {
  public:
     Actor() {}
@@ -223,6 +258,14 @@ class Actor {
     static int searchDeadActorsByID(int *pTotalActors, int id);
 
     void LootActor();
+
+    /**
+     * Takes this actor's gold and items, like looting the corpse does, and hands them to `receiver` instead of the
+     * local party.
+     *
+     * @param receiver                  Where the loot goes.
+     */
+    void lootInto(LootReceiver *receiver);
     bool _427102_IsOkToCastSpell(SpellId spell);
     ActorAbility special_ability_use_check(int a2);
     bool _4273BB_DoesHitOtherActor(Actor *defender, int a3, int a4);

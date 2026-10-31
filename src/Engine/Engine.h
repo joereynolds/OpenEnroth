@@ -158,6 +158,7 @@ class Engine {
     bool _actorsFollowHost = false; // Co-op guest, the monsters do what the host's game says instead of acting on their own.
     std::vector<ActorHit> _actorHitsForHost; // Co-op guest, damage the local party dealt that the host's game has to deal too.
     std::vector<StandInHit> _standInHits; // Co-op host, attacks on other players' parties that their games have to take.
+    std::vector<int> _lootRequestsForHost; // Co-op guest, corpses the local party wants to loot, the host decides who gets what.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

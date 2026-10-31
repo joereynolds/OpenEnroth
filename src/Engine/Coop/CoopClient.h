@@ -101,6 +101,18 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopActorStates> takeActorStates();
 
     /**
+     * Asks the host for what's on a corpse. Does nothing until joined.
+     *
+     * @param request                   Which corpse to loot.
+     */
+    void sendLootRequest(const CoopLootRequest &request);
+
+    /**
+     * @return                          Loot the host handed to this client's party since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopLoot> takeLoot();
+
+    /**
      * @return                          Monster attacks on this client's party received since the last call, oldest
      *                                  first.
      */
@@ -152,4 +164,5 @@ class CoopClient {
     std::optional<CoopTravelDecision> _travelDecision;
     std::vector<CoopActorStates> _actorStates;
     std::vector<CoopPartyHit> _partyHits;
+    std::vector<CoopLoot> _loot;
 };

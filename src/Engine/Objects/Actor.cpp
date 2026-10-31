@@ -3520,25 +3520,55 @@ void StatusBarItemFound(int num_gold_found, std::string_view item_unidentified_n
 
 
 //----- (00426A5A) --------------------------------------------------------
+void PartyLootReceiver::receiveGold(int gold) {
+    pParty->partyFindsGold(gold, GOLD_RECEIVE_SHARE);
+}
+
+void PartyLootReceiver::receiveFoundItem(int gold, const Item &item) {
+    Item copy = item;
+    StatusBarItemFound(gold, pItemTable->items[copy.itemId].unidentifiedName);
+    if (!pParty->addItemToParty(&copy))
+        pParty->setHoldingItem(copy);
+}
+
+bool PartyLootReceiver::receiveExtraItem(const Item &item) {
+    Item copy = item;
+    if (pParty->addItemToParty(&copy))
+        return true;
+    pParty->placeHeldItemInInventoryOrDrop();
+    pParty->setHoldingItem(copy);
+    return false;
+}
+
 void Actor::LootActor() {
+    if (engine->_actorsFollowHost) {
+        engine->_lootRequestsForHost.push_back(id); // The host's game owns the corpse and hands out what's on it.
+        return;
+    }
+
+    pParty->placeHeldItemInInventoryOrDrop();
+    PartyLootReceiver receiver;
+    lootInto(&receiver);
+}
+
+void Actor::lootInto(LootReceiver *receiver) {
     Item Dst;         // [sp+Ch] [bp-2Ch]@1
     bool itemFound;      // [sp+30h] [bp-8h]@1
 
-    pParty->placeHeldItemInInventoryOrDrop();
     Dst.Reset();
     itemFound = false;
     int foundGold = 0;
     if (!ActorHasItem()) {
         foundGold = grng->randomDice(this->monsterInfo.goldDiceRolls, this->monsterInfo.goldDiceSides);
         if (foundGold) {
-            pParty->partyFindsGold(foundGold, GOLD_RECEIVE_SHARE);
+            receiver->receiveGold(foundGold);
         }
     } else {
         if (this->items[3].isGold()) {
             foundGold = this->items[3].goldAmount;
             this->items[3].Reset();
             if (foundGold) {
-                pParty->partyFindsGold(foundGold, GOLD_RECEIVE_SHARE);
+                receiver->receiveGold(foundGold);
             }
         }
     }
@@ -3546,25 +3576,14 @@ void Actor::LootActor() {
         Dst.Reset();
         Dst.itemId = this->carriedItemId;
         Dst.postGenerate(ITEM_SOURCE_MONSTER);
-
-        StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-        if (!pParty->addItemToParty(&Dst)) {
-            pParty->setHoldingItem(Dst);
-        }
+        receiver->receiveFoundItem(foundGold, Dst);
         this->carriedItemId = ITEM_NULL;
         if (this->items[0].itemId != ITEM_NULL) {
-            if (!pParty->addItemToParty(&this->items[0])) {
-                pParty->placeHeldItemInInventoryOrDrop();
-                pParty->setHoldingItem(this->items[0]);
-            }
+            receiver->receiveExtraItem(this->items[0]);
             this->items[0].Reset();
         }
         if (this->items[1].itemId != ITEM_NULL) {
-            if (!pParty->addItemToParty(&this->items[1])) {
-                pParty->placeHeldItemInInventoryOrDrop();
-                pParty->setHoldingItem(this->items[1]);
-            }
+            receiver->receiveExtraItem(this->items[1]);
             this->items[1].Reset();
         }
         this->Remove();
@@ -3574,40 +3593,24 @@ void Actor::LootActor() {
         if (this->items[3].itemId != ITEM_NULL) {
             Dst = this->items[3];
             this->items[3].Reset();
-
-            StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-            if (!pParty->addItemToParty(&Dst)) {
-                pParty->setHoldingItem(Dst);
-            }
+            receiver->receiveFoundItem(foundGold, Dst);
             itemFound = true;
         }
     } else {
         if (grng->random(100) < this->monsterInfo.treasureDropChance && this->monsterInfo.treasureLevel != ITEM_TREASURE_LEVEL_INVALID) {
             pItemTable->generateItem(this->monsterInfo.treasureLevel, this->monsterInfo.treasureType, &Dst);
-
-            StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-            if (!pParty->addItemToParty(&Dst)) {
-                pParty->setHoldingItem(Dst);
-            }
+            receiver->receiveFoundItem(foundGold, Dst);
             itemFound = true;
         }
     }
     if (this->items[0].itemId != ITEM_NULL) {
-        if (!pParty->addItemToParty(&this->items[0])) {
-            pParty->placeHeldItemInInventoryOrDrop();
-            pParty->setHoldingItem(this->items[0]);
+        if (!receiver->receiveExtraItem(this->items[0]))
             itemFound = true;
-        }
         this->items[0].Reset();
     }
     if (this->items[1].itemId != ITEM_NULL) {
-        if (!pParty->addItemToParty(&this->items[1])) {
-            pParty->placeHeldItemInInventoryOrDrop();
-            pParty->setHoldingItem(this->items[1]);
+        if (!receiver->receiveExtraItem(this->items[1]))
             itemFound = true;
-        }
         this->items[1].Reset();
     }
     if (!itemFound || grng->random(100) < 90) {  // for repeatedly get gold and item

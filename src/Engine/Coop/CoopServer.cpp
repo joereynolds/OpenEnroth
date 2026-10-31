@@ -65,6 +65,16 @@ void CoopServer::sendPartyHit(int playerId, const CoopPartyHit &hit) {
             send(peer, NET_CHANNEL_RELIABLE, hit);
 }
 
+void CoopServer::sendLoot(int playerId, const CoopLoot &loot) {
+    for (const auto &[peer, client] : _clients)
+        if (client.playerId == playerId)
+            send(peer, NET_CHANNEL_RELIABLE, loot);
+}
+
+std::vector<CoopLootRequest> CoopServer::takeLootRequests() {
+    return std::exchange(_lootRequests, {});
+}
+
 std::vector<CoopActorDamage> CoopServer::takeActorDamage() {
     return std::exchange(_actorDamage, {});
 }
@@ -98,6 +108,9 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopActorDamage *damage = std::get_if<CoopActorDamage>(&message)) {
         damage->playerId = _clients[peer].playerId;
         _actorDamage.push_back(std::move(*damage));
+    } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
+        request->playerId = _clients[peer].playerId;
+        _lootRequests.push_back(std::move(*request));
     } else if (const CoopTravelAnswer *answer = std::get_if<CoopTravelAnswer>(&message)) {
         if (_vote && _vote->id == answer->voteId) // Answers to a vote that has already ended are dropped.
             recordAnswer(_clients[peer].playerId, answer->accepted);

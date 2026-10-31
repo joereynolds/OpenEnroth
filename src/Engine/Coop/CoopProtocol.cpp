@@ -6,7 +6,10 @@
 #include <string>
 #include <utility>
 
+#include "Engine/Snapshots/EntitySnapshots.h"
+
 #include "Library/Binary/BinarySerialization.h"
+#include "Library/Snapshots/SnapshotSerialization.h"
 
 #include "Utility/Exception.h"
 #include "Utility/Streams/BlobOutputStream.h"
@@ -262,6 +265,53 @@ static void deserializeBody(InputStream &src, CoopPartyHit *dst) {
     dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
     dst->attackerIndex = deserializeInt(src);
     dst->ability = static_cast<ActorAbility>(deserializeInt(src));
+}
+
+static void serializeItem(const Item &item, OutputStream *dst) {
+    Item_MM7 snapshotItem;
+    snapshot(item, &snapshotItem, tags::context(ITEM_SLOT_INVALID));
+    serialize(snapshotItem, dst);
+}
+
+static Item deserializeItem(InputStream &src) {
+    Item_MM7 snapshotItem;
+    deserialize(src, &snapshotItem);
+    Item result;
+    reconstruct(snapshotItem, &result);
+    return result;
+}
+
+static void serializeBody(const CoopLootRequest &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.map), dst);
+    serializeInt(src.index, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopLootRequest *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->index = deserializeInt(src);
+}
+
+static void serializeBody(const CoopLoot &src, OutputStream *dst) {
+    serializeInt(src.gold, dst);
+    serializeBool(src.foundItem.has_value(), dst);
+    if (src.foundItem)
+        serializeItem(*src.foundItem, dst);
+    serializeInt(src.extraItems.size(), dst);
+    for (const Item &item : src.extraItems)
+        serializeItem(item, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopLoot *dst) {
+    dst->gold = deserializeInt(src);
+    if (deserializeBool(src))
+        dst->foundItem = deserializeItem(src);
+    int count = deserializeInt(src);
+    if (count < 0 || count > 4)
+        throw Exception("Coop loot has {} extra items, a corpse can't carry that many", count);
+    for (int i = 0; i < count; i++)
+        dst->extraItems.push_back(deserializeItem(src));
 }
 
 template<size_t I = 0>

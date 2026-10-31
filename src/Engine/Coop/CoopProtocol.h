@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -7,6 +8,7 @@
 #include "Engine/MapEnums.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/Objects/ActorEnums.h"
+#include "Engine/Objects/Item.h"
 #include "Engine/Objects/MonsterEnums.h"
 
 #include "Core/Time/Duration.h"
@@ -119,9 +121,23 @@ struct CoopPartyHit {
     ActorAbility ability = ABILITY_ATTACK1;
 };
 
+/** Client to host, the client's party wants to loot a corpse. */
+struct CoopLootRequest {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    int index = -1; // Index of the dead monster in the map's actor list.
+};
+
+/** Host to a client, what the client's party found on a corpse. */
+struct CoopLoot {
+    int gold = 0;
+    std::optional<Item> foundItem;
+    std::vector<Item> extraItems;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
-                                 CoopActorStates, CoopActorDamage, CoopPartyHit>;
+                                 CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot>;
 
 /**
  * @param message                       Message to encode.

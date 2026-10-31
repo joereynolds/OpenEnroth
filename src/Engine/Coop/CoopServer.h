@@ -82,6 +82,20 @@ class CoopServer {
     void sendPartyHit(int playerId, const CoopPartyHit &hit);
 
     /**
+     * Gives a client what its party found on a corpse. Does nothing if the player has left.
+     *
+     * @param playerId                  Player whose party looted the corpse.
+     * @param loot                      What the party found.
+     */
+    void sendLoot(int playerId, const CoopLoot &loot);
+
+    /**
+     * @return                          Corpses clients' parties want to loot, received since the last call, oldest
+     *                                  first.
+     */
+    [[nodiscard]] std::vector<CoopLootRequest> takeLootRequests();
+
+    /**
      * @return                          Damage that clients' parties dealt to monsters since the last call, oldest
      *                                  first.
      */
@@ -152,4 +166,5 @@ class CoopServer {
     std::optional<CoopTravelVote> _hostVote;
     std::optional<CoopTravelDecision> _hostDecision;
     std::vector<CoopActorDamage> _actorDamage;
+    std::vector<CoopLootRequest> _lootRequests;
 };
