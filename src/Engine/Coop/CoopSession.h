@@ -116,6 +116,7 @@ class CoopSession {
     void handOutLoot();
     void sendLootRequests();
     void applyLoot();
+    void syncQuestBits();
     void sendActorHits();
 
  private:

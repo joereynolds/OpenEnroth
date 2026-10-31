@@ -29,6 +29,12 @@ static bool isInRange(int value, auto first, auto last) {
     return value >= static_cast<int>(first) && value <= static_cast<int>(last);
 }
 
+static void changeQuestBit(QuestBit bit, bool value) {
+    pParty->_questBits.set(bit, value);
+    if (engine->_coopSessionActive)
+        engine->_questBitChanges.push_back(QuestBitChange{bit, value}); // Quest progress is shared in co-op.
+}
+
 bool isEvtVariableValueValid(EvtOpcode opcode, EvtVariable var, int value) {
     assert(opcode == EVENT_Compare || opcode == EVENT_OnCanShowDialogItemCmp || opcode == EVENT_Set ||
            opcode == EVENT_Add || opcode == EVENT_Subtract);
@@ -594,7 +600,7 @@ void setEvtVariable(Character &character, EvtVariable var_type, int var_value) {
                 character.PlayAwardSound();
                 character.playReaction(SPEECH_QUEST_GOT);
             }
-            pParty->_questBits.set(static_cast<QuestBit>(var_value));
+            changeQuestBit(static_cast<QuestBit>(var_value), true);
             return;
         case VAR_PlayerItemInHands:
             item.Reset();
@@ -1171,7 +1177,7 @@ void addEvtVariable(Character &character, EvtVariable var_type, signed int val) 
                 bFlashQuestBook = true;
                 character.PlayAwardSound_Anim97_Face(SPEECH_QUEST_GOT);
             }
-            pParty->_questBits.set(static_cast<QuestBit>(val));
+            changeQuestBit(static_cast<QuestBit>(val), true);
             return;
         case VAR_PlayerItemInHands:
             item.Reset();
@@ -1657,7 +1663,7 @@ bool subtractEvtVariable(Character &character, EvtVariable VarNum, signed int pV
             character.PlayAwardSound_AnimSubtract();
             return true;
         case VAR_QBits_QuestsDone:
-            pParty->_questBits.reset(static_cast<QuestBit>(pValue));
+            changeQuestBit(static_cast<QuestBit>(pValue), false);
             character.playReaction(SPEECH_AWARD_GOT);
             return true;
         case VAR_PlayerItemInHands:

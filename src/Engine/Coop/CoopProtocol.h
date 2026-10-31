@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Engine/MapEnums.h"
+#include "Engine/PartyEnums.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/Objects/ActorEnums.h"
 #include "Engine/Objects/Item.h"
@@ -135,9 +136,17 @@ struct CoopLoot {
     std::vector<Item> extraItems;
 };
 
+/** A quest bit changed in one player's game. Clients send their own, the host relays them to everyone else. */
+struct CoopQuestBit {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    QuestBit bit = QBIT_INVALID;
+    bool value = false;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
-                                 CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot>;
+                                 CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
+                                 CoopQuestBit>;
 
 /**
  * @param message                       Message to encode.

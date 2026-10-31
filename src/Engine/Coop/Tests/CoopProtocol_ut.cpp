@@ -234,6 +234,19 @@ UNIT_TEST(CoopProtocol, LootRoundTrip) {
     EXPECT_EQ(decoded.extraItems[0].itemId, ITEM_POTION_CURE_WOUNDS);
 }
 
+UNIT_TEST(CoopProtocol, QuestBitRoundTrip) {
+    // A quest bit change keeps the player, the bit and its new value.
+    CoopQuestBit change;
+    change.playerId = 1;
+    change.bit = QBIT_ESCAPED_EMERALD_ISLE;
+    change.value = true;
+
+    CoopQuestBit decoded = roundTrip(change);
+    EXPECT_EQ(decoded.playerId, 1);
+    EXPECT_EQ(decoded.bit, QBIT_ESCAPED_EMERALD_ISLE);
+    EXPECT_TRUE(decoded.value);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

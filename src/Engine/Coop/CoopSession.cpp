@@ -19,8 +19,10 @@
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
 #include "Engine/Tables/MapTable.h"
+#include "Engine/Tables/QuestTable.h"
 
 #include "GUI/GUIWindow.h"
+#include "GUI/UI/UIGame.h"
 #include "GUI/UI/UIStatusBar.h"
 
 #include "Utility/String/Format.h"
@@ -34,7 +36,9 @@ static constexpr std::chrono::seconds FULL_ACTOR_UPDATE_INTERVAL{1}; // Makes up
 
 std::unique_ptr<CoopSession> coopSession;
 
-CoopSession::CoopSession() = default;
+CoopSession::CoopSession() {
+    engine->_coopSessionActive = true;
+}
 
 CoopSession::~CoopSession() {
     engine->_remoteParties.clear();
@@ -42,6 +46,8 @@ CoopSession::~CoopSession() {
     engine->_actorHitsForHost.clear();
     engine->_standInHits.clear();
     engine->_lootRequestsForHost.clear();
+    engine->_coopSessionActive = false;
+    engine->_questBitChanges.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -105,6 +111,8 @@ void CoopSession::update() {
         applyPartyHits();
         applyLoot();
     }
+
+    syncQuestBits();
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
     if (decision)
@@ -363,6 +371,33 @@ void CoopSession::applyLoot() {
             receiver.receiveFoundItem(loot.gold, *loot.foundItem);
         for (const Item &item : loot.extraItems)
             receiver.receiveExtraItem(item);
+    }
+}
+
+static void applyQuestBit(const CoopQuestBit &change) {
+    if (change.value && !pParty->_questBits[change.bit] && !pQuestTable[change.bit].empty())
+        bFlashQuestBook = true;
+    pParty->_questBits.set(change.bit, change.value); // Directly, so that the change isn't recorded and sent back.
+}
+
+void CoopSession::syncQuestBits() {
+    for (const QuestBitChange &local : std::exchange(engine->_questBitChanges, {})) {
+        CoopQuestBit change{.bit = local.bit, .value = local.value};
+        if (_server) {
+            change.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendQuestBit(change);
+        } else {
+            _client->sendQuestBit(change);
+        }
+    }
+
+    std::vector<CoopQuestBit> remote = _server ? _server->takeQuestBits() : _client->takeQuestBits();
+    for (const CoopQuestBit &change : remote) {
+        if (change.bit < QBIT_FIRST || change.bit > QBIT_LAST)
+            continue;
+        applyQuestBit(change);
+        if (_server)
+            _server->sendQuestBit(change);
     }
 }
 

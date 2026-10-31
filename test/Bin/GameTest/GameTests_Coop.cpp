@@ -836,3 +836,71 @@ GAME_TEST(Coop, GuestLootComesFromHost) {
     EXPECT_EQ(goldTape.delta(), 37);
     EXPECT_EQ(potionTape.delta(), 1);
 }
+
+GAME_TEST(Coop, QuestProgressIsShared) {
+    // A quest bit one guest's game sets is set in the host's game and passed on to the other guests.
+    auto bitTape = tapes.questBit(QBIT_TALKED_TO_ROLAND);
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient talker("127.0.0.1", coopSession->server()->port(), "Talker");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (talker.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        talker.update();
+        other.update();
+    }
+    ASSERT_EQ(talker.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the bit before the change.
+
+    talker.sendQuestBit(CoopQuestBit{.bit = QBIT_TALKED_TO_ROLAND, .value = true});
+    std::vector<CoopQuestBit> relayed;
+    for (int i = 0; i < 100 && relayed.empty(); i++) { // The talker sends what it queued only when updated.
+        talker.update();
+        game.tick();
+        other.update();
+        relayed = other.takeQuestBits();
+    }
+    talker.update();
+
+    EXPECT_EQ(bitTape, tape(false, true));
+    ASSERT_EQ(relayed.size(), 1);
+    EXPECT_EQ(relayed[0].bit, QBIT_TALKED_TO_ROLAND);
+    EXPECT_TRUE(relayed[0].value);
+    EXPECT_TRUE(talker.takeQuestBits().empty()); // Not echoed back to the player whose game made the change.
+}
+
+GAME_TEST(Coop, GuestQuestProgressReachesHost) {
+    // Talking to Roland in a guest's game sets his quest bit in the host's game too.
+    game.startNewGame();
+    game.teleportTo(MAP_COLONY_ZOD, Vec3f(-10986, 8576, 1728), 180); // On the ledge east of the hanging cage, facing it.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    auto bitTape = tapes.questBit(QBIT_TALKED_TO_ROLAND);
+    test.startTaping();
+
+    game.pointMouseAtDecoration(1); // Roland's cage.
+    game.pressAndReleaseButton(BUTTON_LEFT);
+    game.tick(3);
+    std::vector<CoopQuestBit> changes;
+    for (int i = 0; i < 100 && changes.empty(); i++) {
+        server.update();
+        changes = server.takeQuestBits();
+        game.tick();
+    }
+
+    EXPECT_EQ(bitTape, tape(false, true));
+    ASSERT_EQ(changes.size(), 1);
+    EXPECT_EQ(changes[0].bit, QBIT_TALKED_TO_ROLAND);
+    EXPECT_TRUE(changes[0].value);
+}

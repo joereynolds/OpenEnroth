@@ -314,6 +314,18 @@ static void deserializeBody(InputStream &src, CoopLoot *dst) {
         dst->extraItems.push_back(deserializeItem(src));
 }
 
+static void serializeBody(const CoopQuestBit &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.bit), dst);
+    serializeBool(src.value, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopQuestBit *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->bit = static_cast<QuestBit>(fromStream<std::underlying_type_t<QuestBit>>(src));
+    dst->value = deserializeBool(src);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

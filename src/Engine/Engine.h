@@ -159,6 +159,8 @@ class Engine {
     std::vector<ActorHit> _actorHitsForHost; // Co-op guest, damage the local party dealt that the host's game has to deal too.
     std::vector<StandInHit> _standInHits; // Co-op host, attacks on other players' parties that their games have to take.
     std::vector<int> _lootRequestsForHost; // Co-op guest, corpses the local party wants to loot, the host decides who gets what.
+    bool _coopSessionActive = false; // A co-op game is running, local changes to the shared world are recorded for the others.
+    std::vector<QuestBitChange> _questBitChanges; // Co-op, quest bits the local party's scripts changed.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

@@ -101,6 +101,18 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopActorStates> takeActorStates();
 
     /**
+     * Tells the host that this client's game changed a quest bit. Does nothing until joined.
+     *
+     * @param change                    The change.
+     */
+    void sendQuestBit(const CoopQuestBit &change);
+
+    /**
+     * @return                          Quest bit changes from the other players since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopQuestBit> takeQuestBits();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -165,4 +177,5 @@ class CoopClient {
     std::vector<CoopActorStates> _actorStates;
     std::vector<CoopPartyHit> _partyHits;
     std::vector<CoopLoot> _loot;
+    std::vector<CoopQuestBit> _questBits;
 };

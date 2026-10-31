@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/PartyEnums.h"
 #include "Engine/Objects/ActorEnums.h"
 
 /**
@@ -17,4 +18,12 @@ struct StandInHit {
     int standInId = -1;
     int attackerId = -1;
     ActorAbility ability = ABILITY_ATTACK1;
+};
+
+/**
+ * A quest bit the local party's scripts set or cleared.
+ */
+struct QuestBitChange {
+    QuestBit bit = QBIT_INVALID;
+    bool value = false;
 };

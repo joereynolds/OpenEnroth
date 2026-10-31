@@ -82,6 +82,18 @@ class CoopServer {
     void sendPartyHit(int playerId, const CoopPartyHit &hit);
 
     /**
+     * Sends a quest bit change to every client except the one it came from.
+     *
+     * @param change                    The change, with the id of the player whose game made it.
+     */
+    void sendQuestBit(const CoopQuestBit &change);
+
+    /**
+     * @return                          Quest bit changes clients sent since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopQuestBit> takeQuestBits();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -167,4 +179,5 @@ class CoopServer {
     std::optional<CoopTravelDecision> _hostDecision;
     std::vector<CoopActorDamage> _actorDamage;
     std::vector<CoopLootRequest> _lootRequests;
+    std::vector<CoopQuestBit> _questBits;
 };

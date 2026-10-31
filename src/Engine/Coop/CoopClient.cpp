@@ -92,6 +92,19 @@ void CoopClient::sendActorDamage(const CoopActorDamage &damage) {
     _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
 }
 
+void CoopClient::sendQuestBit(const CoopQuestBit &change) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    CoopQuestBit message = change;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
+}
+
+std::vector<CoopQuestBit> CoopClient::takeQuestBits() {
+    return std::exchange(_questBits, {});
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -132,6 +145,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _remoteParties.erase(left->playerId);
     } else if (CoopTravelVote *vote = std::get_if<CoopTravelVote>(&message)) {
         _pendingVote = std::move(*vote);
+    } else if (const CoopQuestBit *change = std::get_if<CoopQuestBit>(&message)) {
+        _questBits.push_back(*change);
     } else if (CoopLoot *loot = std::get_if<CoopLoot>(&message)) {
         _loot.push_back(std::move(*loot));
     } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {
