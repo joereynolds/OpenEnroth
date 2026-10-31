@@ -119,6 +119,7 @@ class CoopSession {
     void syncQuestBits();
     void syncQuestRewards();
     void syncChests();
+    void syncGroundItems();
     void sendActorHits();
 
  private:

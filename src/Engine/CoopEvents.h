@@ -2,6 +2,9 @@
 
 #include "Engine/PartyEnums.h"
 #include "Engine/Evt/EvtEnums.h"
+#include "Engine/Objects/ItemEnums.h"
+
+#include "Library/Geometry/Vec.h"
 #include "Engine/Objects/ActorEnums.h"
 
 /**
@@ -36,4 +39,12 @@ struct QuestReward {
     EvtVariable variable = VAR_FixedGold;
     int value = 0;
     int characterIndex = 0;
+};
+
+/**
+ * An item the local party picked up from the ground.
+ */
+struct GroundItemTaken {
+    ItemId item = ITEM_NULL;
+    Vec3f pos;
 };

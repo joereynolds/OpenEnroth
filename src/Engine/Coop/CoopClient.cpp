@@ -131,6 +131,19 @@ std::vector<CoopChest> CoopClient::takeChests() {
     return std::exchange(_chests, {});
 }
 
+void CoopClient::sendGroundItemTaken(const CoopGroundItemTaken &taken) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    CoopGroundItemTaken message = taken;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
+}
+
+std::vector<CoopGroundItemTaken> CoopClient::takeGroundItemsTaken() {
+    return std::exchange(_groundItemsTaken, {});
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -177,6 +190,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _questRewards.push_back(std::move(*rewards));
     } else if (CoopChest *chest = std::get_if<CoopChest>(&message)) {
         _chests.push_back(std::move(*chest));
+    } else if (const CoopGroundItemTaken *taken = std::get_if<CoopGroundItemTaken>(&message)) {
+        _groundItemsTaken.push_back(*taken);
     } else if (CoopLoot *loot = std::get_if<CoopLoot>(&message)) {
         _loot.push_back(std::move(*loot));
     } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {

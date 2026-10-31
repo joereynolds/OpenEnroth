@@ -23,6 +23,7 @@
 #include "Engine/Objects/Actor.h"
 #include "Engine/Objects/Character.h"
 #include "Engine/Objects/Chest.h"
+#include "Engine/Objects/SpriteObject.h"
 
 #include "GUI/GUIWindow.h"
 #include "GUI/UI/UIChest.h"
@@ -1057,4 +1058,79 @@ GAME_TEST(Coop, GuestChestChangesReachHost) {
     ASSERT_EQ(chests.size(), 1);
     EXPECT_EQ(chests[0].chest.inventory.size(), itemsBefore - 1);
     EXPECT_EQ(vChests[chestId].inventory.size(), itemsBefore - 1);
+}
+
+GAME_TEST(Coop, GroundItemsAreShared) {
+    // An item one guest picks up from the ground disappears from the host's game and the other guests' games.
+    auto pileTape = tapes.custom([] { return pSpriteObjects[83].uObjectDescID != 0; });
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    game.teleportTo(MAP_TULAREAN_FOREST, Vec3f(-2854, 13472, 1133), 0, -20); // Looking at a pile of 142 gold.
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient taker("127.0.0.1", coopSession->server()->port(), "Taker");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (taker.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        taker.update();
+        other.update();
+    }
+    ASSERT_EQ(taker.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the pile before it's taken.
+
+    CoopGroundItemTaken taken;
+    taken.map = MAP_TULAREAN_FOREST;
+    taken.item = pSpriteObjects[83].containing_item.itemId;
+    taken.pos = pSpriteObjects[83].vPosition + Vec3f(5, 0, 0); // Lying items settle a little differently in every game.
+    taker.sendGroundItemTaken(taken);
+    std::vector<CoopGroundItemTaken> relayed;
+    for (int i = 0; i < 100 && relayed.empty(); i++) { // The taker sends what it queued only when updated.
+        taker.update();
+        game.tick();
+        other.update();
+        relayed = other.takeGroundItemsTaken();
+    }
+
+    EXPECT_EQ(pileTape, tape(true, false));
+    ASSERT_EQ(relayed.size(), 1);
+    EXPECT_EQ(relayed[0].item, taken.item);
+}
+
+GAME_TEST(Coop, GuestGroundItemPickupReachesHost) {
+    // Picking up a pile of gold in a guest's game tells the host which item it was and where it lay.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    game.teleportTo(MAP_TULAREAN_FOREST, Vec3f(-2854, 13472, 1133), 0, -20); // Looking at a pile of 142 gold.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    ItemId pileItem = pSpriteObjects[83].containing_item.itemId;
+    auto goldTape = tapes.gold();
+    test.startTaping();
+    game.tick(); // Space picks items from the billboards the previous frame drew.
+
+    game.pressAndReleaseKey(PlatformKey::KEY_SPACE);
+    game.tick();
+    std::vector<CoopGroundItemTaken> taken;
+    for (int i = 0; i < 100 && taken.empty(); i++) {
+        server.update();
+        taken = server.takeGroundItemsTaken();
+        game.tick();
+    }
+
+    EXPECT_EQ(goldTape.delta(), 142);
+    ASSERT_EQ(taken.size(), 1);
+    EXPECT_EQ(taken[0].map, MAP_TULAREAN_FOREST);
+    EXPECT_EQ(taken[0].item, pileItem);
+    EXPECT_EQ(pSpriteObjects[83].uObjectDescID, 0);
+    EXPECT_EQ(taken[0].pos, pSpriteObjects[83].vPosition); // Taking an item leaves its last position behind.
 }

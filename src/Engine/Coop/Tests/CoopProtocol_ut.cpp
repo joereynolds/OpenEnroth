@@ -264,6 +264,21 @@ UNIT_TEST(CoopProtocol, QuestRewardsRoundTrip) {
     EXPECT_EQ(decoded.rewards[1].characterIndex, 3);
 }
 
+UNIT_TEST(CoopProtocol, GroundItemTakenRoundTrip) {
+    // A taken ground item keeps the player, the map, the item and where it lay.
+    CoopGroundItemTaken taken;
+    taken.playerId = 1;
+    taken.map = MAP_EMERALD_ISLAND;
+    taken.item = ITEM_POTION_CURE_WOUNDS;
+    taken.pos = Vec3f(10, -20, 30.5f);
+
+    CoopGroundItemTaken decoded = roundTrip(taken);
+    EXPECT_EQ(decoded.playerId, 1);
+    EXPECT_EQ(decoded.map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(decoded.item, ITEM_POTION_CURE_WOUNDS);
+    EXPECT_EQ(decoded.pos, Vec3f(10, -20, 30.5f));
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

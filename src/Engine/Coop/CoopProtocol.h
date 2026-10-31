@@ -159,10 +159,18 @@ struct CoopChest {
     Chest chest; // Position is left out, every game works it out on its own.
 };
 
+/** An item one player picked up from the ground, it's gone for everyone. Relayed like `CoopQuestBit`. */
+struct CoopGroundItemTaken {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    ItemId item = ITEM_NULL;
+    Vec3f pos; // Ground items have different indices in different games, they are matched by kind and place.
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
-                                 CoopQuestBit, CoopQuestRewards, CoopChest>;
+                                 CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken>;
 
 /**
  * @param message                       Message to encode.

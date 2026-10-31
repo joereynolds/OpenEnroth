@@ -17,6 +17,7 @@
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Objects/Actor.h"
 #include "Engine/Objects/Chest.h"
+#include "Engine/Objects/SpriteObject.h"
 #include "Engine/Objects/Character.h"
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
@@ -52,6 +53,7 @@ CoopSession::~CoopSession() {
     engine->_questBitChanges.clear();
     engine->_questRewards.clear();
     engine->_changedChests.clear();
+    engine->_takenGroundItems.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -119,6 +121,7 @@ void CoopSession::update() {
     syncQuestBits();
     syncQuestRewards();
     syncChests();
+    syncGroundItems();
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
     if (decision)
@@ -453,6 +456,45 @@ void CoopSession::syncChests() {
         }
         if (_server)
             _server->sendChest(chest); // Even from another map, a guest there may share it with the sender.
+    }
+}
+
+static constexpr float GROUND_ITEM_MATCH_DISTANCE = 64; // Items lying this close with the same kind count as the same item.
+
+static void removeGroundItem(ItemId item, const Vec3f &pos) {
+    int closest = -1;
+    float closestDistance = GROUND_ITEM_MATCH_DISTANCE;
+    for (int i = 0; i < std::ssize(pSpriteObjects); i++) {
+        const SpriteObject &object = pSpriteObjects[i];
+        if (!object.uObjectDescID || object.containing_item.itemId != item)
+            continue;
+        float distance = (object.vPosition - pos).length();
+        if (distance < closestDistance) {
+            closest = i;
+            closestDistance = distance;
+        }
+    }
+    if (closest != -1)
+        SpriteObject::Remove(closest);
+}
+
+void CoopSession::syncGroundItems() {
+    for (const GroundItemTaken &local : std::exchange(engine->_takenGroundItems, {})) {
+        CoopGroundItemTaken taken{.map = engine->_currentLoadedMapId, .item = local.item, .pos = local.pos};
+        if (_server) {
+            taken.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendGroundItemTaken(taken);
+        } else {
+            _client->sendGroundItemTaken(taken);
+        }
+    }
+
+    std::vector<CoopGroundItemTaken> remote = _server ? _server->takeGroundItemsTaken() : _client->takeGroundItemsTaken();
+    for (const CoopGroundItemTaken &taken : remote) {
+        if (taken.map == engine->_currentLoadedMapId)
+            removeGroundItem(taken.item, taken.pos);
+        if (_server)
+            _server->sendGroundItemTaken(taken);
     }
 }
 

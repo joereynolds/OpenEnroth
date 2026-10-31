@@ -137,6 +137,19 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopChest> takeChests();
 
     /**
+     * Tells the host that this client's party took an item from the ground. Does nothing until joined.
+     *
+     * @param taken                     The item.
+     */
+    void sendGroundItemTaken(const CoopGroundItemTaken &taken);
+
+    /**
+     * @return                          Ground items the other players' parties took since the last call, oldest
+     *                                  first.
+     */
+    [[nodiscard]] std::vector<CoopGroundItemTaken> takeGroundItemsTaken();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -204,4 +217,5 @@ class CoopClient {
     std::vector<CoopQuestBit> _questBits;
     std::vector<CoopQuestRewards> _questRewards;
     std::vector<CoopChest> _chests;
+    std::vector<CoopGroundItemTaken> _groundItemsTaken;
 };

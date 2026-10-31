@@ -118,6 +118,18 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopChest> takeChests();
 
     /**
+     * Tells every client except the one whose party took it that a ground item is gone.
+     *
+     * @param taken                     The item, with the id of the player whose party took it.
+     */
+    void sendGroundItemTaken(const CoopGroundItemTaken &taken);
+
+    /**
+     * @return                          Ground items clients' parties took since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopGroundItemTaken> takeGroundItemsTaken();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -206,4 +218,5 @@ class CoopServer {
     std::vector<CoopQuestBit> _questBits;
     std::vector<CoopQuestRewards> _questRewards;
     std::vector<CoopChest> _chests;
+    std::vector<CoopGroundItemTaken> _groundItemsTaken;
 };
