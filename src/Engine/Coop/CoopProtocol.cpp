@@ -145,45 +145,62 @@ static MapDestination deserializeDestination(InputStream &src) {
     }
 }
 
-static void serializeBody(const CoopTravelRequest &src, OutputStream *dst) {
+static void serializeVoteKind(CoopVoteKind kind, OutputStream *dst) {
+    serialize(static_cast<uint8_t>(kind), dst);
+}
+
+static CoopVoteKind deserializeVoteKind(InputStream &src) {
+    uint8_t kind = fromStream<uint8_t>(src);
+    if (kind > std::to_underlying(COOP_VOTE_REST))
+        throw Exception("Unknown coop vote kind {}", kind);
+    return static_cast<CoopVoteKind>(kind);
+}
+
+static void serializeBody(const CoopVoteRequest &src, OutputStream *dst) {
+    serializeVoteKind(src.kind, dst);
     serializeDestination(src.destination, dst);
 }
 
-static void deserializeBody(InputStream &src, CoopTravelRequest *dst) {
+static void deserializeBody(InputStream &src, CoopVoteRequest *dst) {
+    dst->kind = deserializeVoteKind(src);
     dst->destination = deserializeDestination(src);
 }
 
-static void serializeBody(const CoopTravelVote &src, OutputStream *dst) {
+static void serializeBody(const CoopVote &src, OutputStream *dst) {
     serializeInt(src.voteId, dst);
+    serializeVoteKind(src.kind, dst);
     serialize(src.proposerName, dst);
     serializeDestination(src.destination, dst);
 }
 
-static void deserializeBody(InputStream &src, CoopTravelVote *dst) {
+static void deserializeBody(InputStream &src, CoopVote *dst) {
     dst->voteId = deserializeInt(src);
+    dst->kind = deserializeVoteKind(src);
     deserialize(src, &dst->proposerName);
     dst->destination = deserializeDestination(src);
 }
 
-static void serializeBody(const CoopTravelAnswer &src, OutputStream *dst) {
+static void serializeBody(const CoopVoteAnswer &src, OutputStream *dst) {
     serializeInt(src.voteId, dst);
     serializeBool(src.accepted, dst);
 }
 
-static void deserializeBody(InputStream &src, CoopTravelAnswer *dst) {
+static void deserializeBody(InputStream &src, CoopVoteAnswer *dst) {
     dst->voteId = deserializeInt(src);
     dst->accepted = deserializeBool(src);
 }
 
-static void serializeBody(const CoopTravelDecision &src, OutputStream *dst) {
+static void serializeBody(const CoopVoteDecision &src, OutputStream *dst) {
     serializeInt(src.voteId, dst);
+    serializeVoteKind(src.kind, dst);
     serializeBool(src.approved, dst);
     serialize(src.declinedBy, dst);
     serializeDestination(src.destination, dst);
 }
 
-static void deserializeBody(InputStream &src, CoopTravelDecision *dst) {
+static void deserializeBody(InputStream &src, CoopVoteDecision *dst) {
     dst->voteId = deserializeInt(src);
+    dst->kind = deserializeVoteKind(src);
     dst->approved = deserializeBool(src);
     deserialize(src, &dst->declinedBy);
     dst->destination = deserializeDestination(src);

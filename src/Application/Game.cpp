@@ -795,13 +795,13 @@ void Game::processQueuedMessages() {
                 }
                 continue;
             }
-            case UIMSG_CoopTravelAccept:
-            case UIMSG_CoopTravelDecline:
+            case UIMSG_CoopVoteAccept:
+            case UIMSG_CoopVoteDecline:
                 PlayButtonClickSound();
                 DialogueEnding();
                 current_screen_type = SCREEN_GAME;
                 if (coopSession)
-                    coopSession->answerTravel(uMessage == UIMSG_CoopTravelAccept);
+                    coopSession->answerVote(uMessage == UIMSG_CoopVoteAccept);
                 continue;
             case UIMSG_CancelTravelByFoot:
                 PlayButtonClickSound();
@@ -1521,11 +1521,11 @@ void Game::processQueuedMessages() {
 }
 
 //----- (0046A14B) --------------------------------------------------------
-void Game::showCoopTravelVote() {
-    bool voteWindowOpen = pDialogueWindow && pDialogueWindow->eWindowType == WINDOW_COOP_TRAVEL_VOTE;
-    const std::optional<CoopTravelVote> &vote = coopSession->pendingVote();
+void Game::showCoopVote() {
+    bool voteWindowOpen = pDialogueWindow && pDialogueWindow->eWindowType == WINDOW_COOP_VOTE;
+    const std::optional<CoopVote> &vote = coopSession->pendingVote();
     if (vote && !voteWindowOpen && !pDialogueWindow && current_screen_type == SCREEN_GAME) {
-        pDialogueWindow = std::make_unique<GUIWindow_CoopTravelVote>(vote->proposerName, vote->destination.map());
+        pDialogueWindow = std::make_unique<GUIWindow_CoopVote>(vote->proposerName, vote->destination.map());
     } else if (!vote && voteWindowOpen) { // Someone else refused before the local player answered.
         DialogueEnding();
         current_screen_type = SCREEN_GAME;
@@ -1624,7 +1624,7 @@ void Game::gameLoop() {
 
             if (coopSession) {
                 coopSession->update();
-                showCoopTravelVote();
+                showCoopVote();
             }
 
             GameUI_WritePointedObjectStatusString();

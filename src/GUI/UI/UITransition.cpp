@@ -202,13 +202,13 @@ void GUIWindow_IndoorEntryExit::Update() {
     }
 }
 
-GUIWindow_CoopTravelVote::GUIWindow_CoopTravelVote(std::string_view proposerName, MapId destinationMap)
-    : GUIWindow_Transition(WINDOW_COOP_TRAVEL_VOTE, SCREEN_CHANGE_LOCATION), _proposerName(proposerName), _destinationMap(destinationMap) {
+GUIWindow_CoopVote::GUIWindow_CoopVote(std::string_view proposerName, MapId destinationMap)
+    : GUIWindow_Transition(WINDOW_COOP_VOTE, SCREEN_CHANGE_LOCATION), _proposerName(proposerName), _destinationMap(destinationMap) {
     transition_ui_icon = assets->getIcon("outside");
-    createButtons(fmt::format("Travel to {}", pMapTable->pInfos[_destinationMap].name), "Stay here", UIMSG_CoopTravelAccept, UIMSG_CoopTravelDecline);
+    createButtons(fmt::format("Travel to {}", pMapTable->pInfos[_destinationMap].name), "Stay here", UIMSG_CoopVoteAccept, UIMSG_CoopVoteDecline);
 }
 
-void GUIWindow_CoopTravelVote::Update() {
+void GUIWindow_CoopVote::Update() {
     render->DrawQuad2D(_dialogueBackground, {477, 0});
     render->DrawQuad2D(game_ui_right_panel_frame, {468, 0});
     render->DrawQuad2D(transition_ui_icon, {pNPCPortraits_x[0][0], pNPCPortraits_y[0][0]});

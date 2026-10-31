@@ -150,24 +150,25 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopActorDamage> takeActorDamage();
 
     /**
-     * Proposes that the group travels, on behalf of the host. Everyone else is asked, and the outcome is reported by
-     * `takeTravelDecision`. With nobody else around the trip is approved right away.
+     * Proposes something the whole group has to agree on, on behalf of the host. Everyone else is asked, and the
+     * outcome is reported by `takeVoteDecision`. With nobody else around it's approved right away.
      *
-     * @param destination               Where to travel.
+     * @param kind                      What to vote on.
+     * @param destination               Where to travel, for a travel vote.
      */
-    void requestTravel(const MapDestination &destination);
+    void requestVote(CoopVoteKind kind, const MapDestination &destination = {});
 
     /**
      * Answers the vote returned by `pendingVote` on behalf of the host. Does nothing if there's none.
      *
      * @param accepted                  Whether the host agrees to travel.
      */
-    void answerTravel(bool accepted);
+    void answerVote(bool accepted);
 
     /**
      * @return                          Vote that's waiting for the host's answer, if any.
      */
-    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const {
+    [[nodiscard]] const std::optional<CoopVote> &pendingVote() const {
         return _hostVote;
     }
 
@@ -175,7 +176,7 @@ class CoopServer {
      * @return                          Outcome of the last vote or of a turned down request, if there's one the host
      *                                  hasn't taken yet.
      */
-    [[nodiscard]] std::optional<CoopTravelDecision> takeTravelDecision();
+    [[nodiscard]] std::optional<CoopVoteDecision> takeVoteDecision();
 
  private:
     struct Client {
@@ -187,7 +188,7 @@ class CoopServer {
     void handleHello(NetPeerId peer, const CoopHello &hello);
     void handlePartyPose(NetPeerId peer, CoopPartyPose pose);
     void handleDisconnect(NetPeerId peer);
-    void startVote(int proposerId, NetPeerId proposerPeer, const MapDestination &destination);
+    void startVote(int proposerId, NetPeerId proposerPeer, CoopVoteKind kind, const MapDestination &destination);
     void recordAnswer(int playerId, bool accepted);
     void finishVote(bool approved, std::string declinedBy);
     [[nodiscard]] std::string playerName(int playerId) const;
@@ -206,13 +207,14 @@ class CoopServer {
 
     struct Vote {
         int id = -1;
+        CoopVoteKind kind = COOP_VOTE_TRAVEL;
         MapDestination destination;
         std::set<int> waitingFor; // Player ids that haven't answered yet.
     };
     std::optional<Vote> _vote;
     int _nextVoteId = 1;
-    std::optional<CoopTravelVote> _hostVote;
-    std::optional<CoopTravelDecision> _hostDecision;
+    std::optional<CoopVote> _hostVote;
+    std::optional<CoopVoteDecision> _hostDecision;
     std::vector<CoopActorDamage> _actorDamage;
     std::vector<CoopLootRequest> _lootRequests;
     std::vector<CoopQuestBit> _questBits;

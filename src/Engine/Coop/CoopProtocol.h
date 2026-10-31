@@ -20,6 +20,8 @@
 
 #include "Utility/Memory/Blob.h"
 
+#include "CoopEnums.h"
+
 /** Bumped on every change to the messages below, peers with different versions refuse to talk. */
 constexpr int COOP_PROTOCOL_VERSION = 1;
 
@@ -62,27 +64,30 @@ struct CoopPlayerLeft {
     int playerId = -1;
 };
 
-/** Client to host, asks for the group to travel to another map. The host puts it to a vote. */
-struct CoopTravelRequest {
-    MapDestination destination;
+/** Client to host, proposes something the whole group has to agree on. The host puts it to a vote. */
+struct CoopVoteRequest {
+    CoopVoteKind kind = COOP_VOTE_TRAVEL;
+    MapDestination destination; // Where to travel, unused by other kinds of votes.
 };
 
-/** Host to clients, asks every player except the proposer whether to travel. */
-struct CoopTravelVote {
+/** Host to clients, asks every player except the proposer whether to go along. */
+struct CoopVote {
     int voteId = -1;
+    CoopVoteKind kind = COOP_VOTE_TRAVEL;
     std::string proposerName;
     MapDestination destination;
 };
 
-/** Client to host, a player's answer to a `CoopTravelVote`. */
-struct CoopTravelAnswer {
+/** Client to host, a player's answer to a `CoopVote`. */
+struct CoopVoteAnswer {
     int voteId = -1;
     bool accepted = false;
 };
 
-/** Host to clients, how a vote ended. Everyone travels to the destination if it was approved. */
-struct CoopTravelDecision {
+/** Host to clients, how a vote ended. Everyone does what was voted on if it was approved. */
+struct CoopVoteDecision {
     int voteId = -1; // -1 for a request that was turned down without a vote.
+    CoopVoteKind kind = COOP_VOTE_TRAVEL;
     bool approved = false;
     std::string declinedBy; // Name of the player who said no, empty if approved or turned down without a vote.
     MapDestination destination;
@@ -168,7 +173,7 @@ struct CoopGroundItemTaken {
 };
 
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
-                                 CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
+                                 CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
                                  CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken>;
 

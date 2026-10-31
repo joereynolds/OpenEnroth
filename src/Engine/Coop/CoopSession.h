@@ -91,14 +91,14 @@ class CoopSession {
     /**
      * @return                          Trip that's waiting for the local player's answer, if any.
      */
-    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const;
+    [[nodiscard]] const std::optional<CoopVote> &pendingVote() const;
 
     /**
      * Answers the vote returned by `pendingVote` on behalf of the local player.
      *
      * @param accepted                  Whether the local player agrees to travel.
      */
-    void answerTravel(bool accepted);
+    void answerVote(bool accepted);
 
  private:
     CoopSession();
@@ -106,7 +106,7 @@ class CoopSession {
     [[nodiscard]] CoopPartyPose localPose();
     [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const;
     void sendLocalPose(const CoopPartyPose &pose);
-    void handleTravelDecision(const CoopTravelDecision &decision);
+    void handleVoteDecision(const CoopVoteDecision &decision);
     void sendActorStates();
     void applyActorStates();
     void applyActorDamage();

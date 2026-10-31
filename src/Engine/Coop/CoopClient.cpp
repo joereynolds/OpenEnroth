@@ -61,26 +61,26 @@ void CoopClient::sendLocalPose(const CoopPartyPose &pose) {
     _net->send(_host, NET_CHANNEL_UNRELIABLE, encodeCoopMessage(message));
 }
 
-void CoopClient::requestTravel(const MapDestination &destination) {
+void CoopClient::requestVote(CoopVoteKind kind, const MapDestination &destination) {
     if (_state != COOP_CLIENT_JOINED)
         return;
 
-    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(CoopTravelRequest{destination}));
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(CoopVoteRequest{kind, destination}));
 }
 
-void CoopClient::answerTravel(bool accepted) {
+void CoopClient::answerVote(bool accepted) {
     if (!_pendingVote)
         return;
 
-    CoopTravelAnswer answer;
+    CoopVoteAnswer answer;
     answer.voteId = _pendingVote->voteId;
     answer.accepted = accepted;
     _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(answer));
     _pendingVote.reset();
 }
 
-std::optional<CoopTravelDecision> CoopClient::takeTravelDecision() {
-    return std::exchange(_travelDecision, std::nullopt);
+std::optional<CoopVoteDecision> CoopClient::takeVoteDecision() {
+    return std::exchange(_voteDecision, std::nullopt);
 }
 
 void CoopClient::sendActorDamage(const CoopActorDamage &damage) {
@@ -182,7 +182,7 @@ void CoopClient::handleMessage(CoopMessage message) {
         _remoteParties[pose->playerId] = *pose;
     } else if (const CoopPlayerLeft *left = std::get_if<CoopPlayerLeft>(&message)) {
         _remoteParties.erase(left->playerId);
-    } else if (CoopTravelVote *vote = std::get_if<CoopTravelVote>(&message)) {
+    } else if (CoopVote *vote = std::get_if<CoopVote>(&message)) {
         _pendingVote = std::move(*vote);
     } else if (const CoopQuestBit *change = std::get_if<CoopQuestBit>(&message)) {
         _questBits.push_back(*change);
@@ -198,10 +198,10 @@ void CoopClient::handleMessage(CoopMessage message) {
         _partyHits.push_back(*hit);
     } else if (CoopActorStates *states = std::get_if<CoopActorStates>(&message)) {
         _actorStates.push_back(std::move(*states));
-    } else if (CoopTravelDecision *decision = std::get_if<CoopTravelDecision>(&message)) {
+    } else if (CoopVoteDecision *decision = std::get_if<CoopVoteDecision>(&message)) {
         if (_pendingVote && _pendingVote->voteId == decision->voteId)
             _pendingVote.reset(); // Someone else said no before this player answered.
-        _travelDecision = std::move(*decision);
+        _voteDecision = std::move(*decision);
     } else {
         fail("Host sent a client-only message");
     }

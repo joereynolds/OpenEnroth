@@ -219,8 +219,8 @@ enum UIMessageType : uint32_t {
     UIMSG_QuickLoad = 2001,
     UIMSG_CreditsFinished = 2002,
     UIMSG_CastQuickSpellAtActor = 2003, // Shift-click on an actor, param is its id. No picker opens.
-    UIMSG_CoopTravelAccept = 2004,
-    UIMSG_CoopTravelDecline = 2005,
+    UIMSG_CoopVoteAccept = 2004,
+    UIMSG_CoopVoteDecline = 2005,
 
     UIMSG_Invalid = 0xffffffff
 };
@@ -333,7 +333,7 @@ enum class WindowType {
     WINDOW_PARTY_CREATION,      // Vanilla MM7 uses 1.
     WINDOW_GAME_UI,             // Vanilla MM7 uses 1.
     WINDOW_CREDITS,             // Vanilla MM7 uses 1.
-    WINDOW_COOP_TRAVEL_VOTE,
+    WINDOW_COOP_VOTE,
 };
 using enum WindowType;
 

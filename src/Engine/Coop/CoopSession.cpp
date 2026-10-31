@@ -123,9 +123,9 @@ void CoopSession::update() {
     syncChests();
     syncGroundItems();
 
-    std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
+    std::optional<CoopVoteDecision> decision = _server ? _server->takeVoteDecision() : _client->takeVoteDecision();
     if (decision)
-        handleTravelDecision(*decision);
+        handleVoteDecision(*decision);
 
     engine->_remoteParties.clear();
     for (const auto &[playerId, remote] : remoteParties())
@@ -150,27 +150,27 @@ bool CoopSession::interceptMapChange() {
     MapDestination destination = *std::exchange(engine->_pendingTransition, std::nullopt);
     gameTimer->setPaused(false); // Travel UIs pause the game, and the party now stays where it is.
     if (_server) {
-        _server->requestTravel(destination);
+        _server->requestVote(COOP_VOTE_TRAVEL, destination);
     } else {
-        _client->requestTravel(destination);
+        _client->requestVote(COOP_VOTE_TRAVEL, destination);
     }
     engine->_statusBar->setEvent(fmt::format("Asked the others to travel to {}", pMapTable->pInfos[map].name));
     return true;
 }
 
-const std::optional<CoopTravelVote> &CoopSession::pendingVote() const {
+const std::optional<CoopVote> &CoopSession::pendingVote() const {
     return _server ? _server->pendingVote() : _client->pendingVote();
 }
 
-void CoopSession::answerTravel(bool accepted) {
+void CoopSession::answerVote(bool accepted) {
     if (_server) {
-        _server->answerTravel(accepted);
+        _server->answerVote(accepted);
     } else {
-        _client->answerTravel(accepted);
+        _client->answerVote(accepted);
     }
 }
 
-void CoopSession::handleTravelDecision(const CoopTravelDecision &decision) {
+void CoopSession::handleVoteDecision(const CoopVoteDecision &decision) {
     std::string mapName = pMapTable->pInfos[decision.destination.map()].name;
     if (decision.approved) {
         _travelApproved = true;

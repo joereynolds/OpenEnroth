@@ -123,16 +123,16 @@ std::vector<CoopActorDamage> CoopServer::takeActorDamage() {
     return std::exchange(_actorDamage, {});
 }
 
-void CoopServer::requestTravel(const MapDestination &destination) {
-    startVote(HOST_PLAYER_ID, -1, destination);
+void CoopServer::requestVote(CoopVoteKind kind, const MapDestination &destination) {
+    startVote(HOST_PLAYER_ID, -1, kind, destination);
 }
 
-void CoopServer::answerTravel(bool accepted) {
+void CoopServer::answerVote(bool accepted) {
     if (_hostVote)
         recordAnswer(HOST_PLAYER_ID, accepted);
 }
 
-std::optional<CoopTravelDecision> CoopServer::takeTravelDecision() {
+std::optional<CoopVoteDecision> CoopServer::takeVoteDecision() {
     return std::exchange(_hostDecision, std::nullopt);
 }
 
@@ -147,8 +147,8 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
         handleHello(peer, *hello);
     } else if (CoopPartyPose *pose = std::get_if<CoopPartyPose>(&message)) {
         handlePartyPose(peer, std::move(*pose));
-    } else if (const CoopTravelRequest *request = std::get_if<CoopTravelRequest>(&message)) {
-        startVote(_clients[peer].playerId, peer, request->destination);
+    } else if (const CoopVoteRequest *request = std::get_if<CoopVoteRequest>(&message)) {
+        startVote(_clients[peer].playerId, peer, request->kind, request->destination);
     } else if (CoopActorDamage *damage = std::get_if<CoopActorDamage>(&message)) {
         damage->playerId = _clients[peer].playerId;
         _actorDamage.push_back(std::move(*damage));
@@ -167,7 +167,7 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
         request->playerId = _clients[peer].playerId;
         _lootRequests.push_back(std::move(*request));
-    } else if (const CoopTravelAnswer *answer = std::get_if<CoopTravelAnswer>(&message)) {
+    } else if (const CoopVoteAnswer *answer = std::get_if<CoopVoteAnswer>(&message)) {
         if (_vote && _vote->id == answer->voteId) // Answers to a vote that has already ended are dropped.
             recordAnswer(_clients[peer].playerId, answer->accepted);
     } else {
@@ -243,9 +243,10 @@ void CoopServer::handleDisconnect(NetPeerId peer) {
     }
 }
 
-void CoopServer::startVote(int proposerId, NetPeerId proposerPeer, const MapDestination &destination) {
+void CoopServer::startVote(int proposerId, NetPeerId proposerPeer, CoopVoteKind kind, const MapDestination &destination) {
     if (_vote) {
-        CoopTravelDecision turnedDown;
+        CoopVoteDecision turnedDown;
+        turnedDown.kind = kind;
         turnedDown.destination = destination;
         if (proposerPeer == -1) {
             _hostDecision = std::move(turnedDown);
@@ -257,6 +258,7 @@ void CoopServer::startVote(int proposerId, NetPeerId proposerPeer, const MapDest
 
     Vote vote;
     vote.id = _nextVoteId++;
+    vote.kind = kind;
     vote.destination = destination;
     if (proposerId != HOST_PLAYER_ID)
         vote.waitingFor.insert(HOST_PLAYER_ID);
@@ -265,8 +267,9 @@ void CoopServer::startVote(int proposerId, NetPeerId proposerPeer, const MapDest
             vote.waitingFor.insert(client.playerId);
     _vote = vote;
 
-    CoopTravelVote message;
+    CoopVote message;
     message.voteId = vote.id;
+    message.kind = kind;
     message.proposerName = playerName(proposerId);
     message.destination = destination;
     if (vote.waitingFor.contains(HOST_PLAYER_ID))
@@ -299,8 +302,9 @@ void CoopServer::recordAnswer(int playerId, bool accepted) {
 void CoopServer::finishVote(bool approved, std::string declinedBy) {
     assert(_vote);
 
-    CoopTravelDecision decision;
+    CoopVoteDecision decision;
     decision.voteId = _vote->id;
+    decision.kind = _vote->kind;
     decision.approved = approved;
     decision.declinedBy = std::move(declinedBy);
     decision.destination = _vote->destination;

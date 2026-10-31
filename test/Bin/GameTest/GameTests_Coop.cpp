@@ -215,12 +215,12 @@ GAME_TEST(Coop, LeavingTheMapNeedsEveryonesAgreement) {
         EXPECT_EQ(guest.pendingVote()->destination.map(), MAP_ERATHIA);
         EXPECT_EQ(engine->_currentLoadedMapId, MAP_HIDDEN_TOMB);
 
-        guest.answerTravel(accept);
-        std::optional<CoopTravelDecision> decision;
+        guest.answerVote(accept);
+        std::optional<CoopVoteDecision> decision;
         for (int i = 0; i < 100 && !decision; i++) {
             guest.update();
             game.tick();
-            decision = guest.takeTravelDecision();
+            decision = guest.takeVoteDecision();
         }
         ASSERT_TRUE(decision);
         if (accept) {
@@ -256,17 +256,17 @@ GAME_TEST(Coop, GuestAnswersTravelPrompt) {
         ASSERT_EQ(server.remoteParties().size(), 1);
         test.startTaping();
 
-        server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+        server.requestVote(COOP_VOTE_TRAVEL, MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
         for (int i = 0; i < 100 && current_screen_type != SCREEN_CHANGE_LOCATION; i++) {
             server.update();
             game.tick();
         }
         game.pressGuiButton(accept ? "Transition_Yes" : "Transition_No");
-        std::optional<CoopTravelDecision> hostDecision;
+        std::optional<CoopVoteDecision> hostDecision;
         for (int i = 0; i < 100 && !hostDecision; i++) {
             game.tick();
             server.update();
-            hostDecision = server.takeTravelDecision();
+            hostDecision = server.takeVoteDecision();
         }
         if (accept)
             game.skipLoadingScreen();
@@ -301,7 +301,7 @@ GAME_TEST(Coop, TravelPromptClosesWhenSomeoneElseRefuses) {
     ASSERT_EQ(server.remoteParties().size(), 2);
     test.startTaping();
 
-    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    server.requestVote(COOP_VOTE_TRAVEL, MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
     for (int i = 0; i < 100 && (current_screen_type != SCREEN_CHANGE_LOCATION || !other.pendingVote()); i++) {
         server.update();
         other.update();
@@ -310,7 +310,7 @@ GAME_TEST(Coop, TravelPromptClosesWhenSomeoneElseRefuses) {
     ASSERT_EQ(current_screen_type, SCREEN_CHANGE_LOCATION);
     ASSERT_TRUE(other.pendingVote());
 
-    other.answerTravel(false);
+    other.answerVote(false);
     for (int i = 0; i < 100 && current_screen_type == SCREEN_CHANGE_LOCATION; i++) {
         other.update();
         server.update();

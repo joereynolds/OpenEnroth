@@ -168,24 +168,25 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopPartyHit> takePartyHits();
 
     /**
-     * Asks the host to put a trip to a vote. Does nothing until joined. The outcome is reported by
-     * `takeTravelDecision`.
+     * Asks the host to put something the whole group has to agree on to a vote. Does nothing until joined. The
+     * outcome is reported by `takeVoteDecision`.
      *
-     * @param destination               Where to travel.
+     * @param kind                      What to vote on.
+     * @param destination               Where to travel, for a travel vote.
      */
-    void requestTravel(const MapDestination &destination);
+    void requestVote(CoopVoteKind kind, const MapDestination &destination = {});
 
     /**
      * Answers the vote returned by `pendingVote`. Does nothing if there's none.
      *
      * @param accepted                  Whether this player agrees to travel.
      */
-    void answerTravel(bool accepted);
+    void answerVote(bool accepted);
 
     /**
      * @return                          Vote that's waiting for this player's answer, if any.
      */
-    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const {
+    [[nodiscard]] const std::optional<CoopVote> &pendingVote() const {
         return _pendingVote;
     }
 
@@ -193,7 +194,7 @@ class CoopClient {
      * @return                          Outcome of the last vote or of a turned down request, if there's one that
      *                                  hasn't been taken yet.
      */
-    [[nodiscard]] std::optional<CoopTravelDecision> takeTravelDecision();
+    [[nodiscard]] std::optional<CoopVoteDecision> takeVoteDecision();
 
  private:
     void handleMessage(CoopMessage message);
@@ -209,8 +210,8 @@ class CoopClient {
     int _playerId = -1;
     Blob _saveGame;
     std::map<int, CoopPartyPose> _remoteParties;
-    std::optional<CoopTravelVote> _pendingVote;
-    std::optional<CoopTravelDecision> _travelDecision;
+    std::optional<CoopVote> _pendingVote;
+    std::optional<CoopVoteDecision> _voteDecision;
     std::vector<CoopActorStates> _actorStates;
     std::vector<CoopPartyHit> _partyHits;
     std::vector<CoopLoot> _loot;
