@@ -56,20 +56,21 @@ class GUIWindow_IndoorEntryExit : public GUIWindow_Transition {
 };
 
 /**
- * Asks the local player whether to agree to a trip another co-op player proposed.
+ * Asks the local player whether to agree to something another co-op player proposed, like a trip or a rest.
  */
 class GUIWindow_CoopVote : public GUIWindow_Transition {
  public:
     /**
-     * @param proposerName              Name of the player who wants to travel.
-     * @param destinationMap            Where they want to go.
+     * @param title                     Short heading, e.g. the destination's name.
+     * @param question                  What the other player proposes, put as a question.
+     * @param acceptHint                Hint for the button that agrees.
      */
-    GUIWindow_CoopVote(std::string_view proposerName, MapId destinationMap);
+    GUIWindow_CoopVote(std::string title, std::string question, std::string acceptHint);
     virtual ~GUIWindow_CoopVote() {}
 
     virtual void Update() override;
 
  private:
-    std::string _proposerName;
-    MapId _destinationMap = MAP_INVALID;
+    std::string _title;
+    std::string _question;
 };

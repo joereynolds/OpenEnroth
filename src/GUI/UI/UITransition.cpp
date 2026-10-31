@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <string_view>
 
 #include "Engine/Engine.h"
@@ -202,10 +203,10 @@ void GUIWindow_IndoorEntryExit::Update() {
     }
 }
 
-GUIWindow_CoopVote::GUIWindow_CoopVote(std::string_view proposerName, MapId destinationMap)
-    : GUIWindow_Transition(WINDOW_COOP_VOTE, SCREEN_CHANGE_LOCATION), _proposerName(proposerName), _destinationMap(destinationMap) {
+GUIWindow_CoopVote::GUIWindow_CoopVote(std::string title, std::string question, std::string acceptHint)
+    : GUIWindow_Transition(WINDOW_COOP_VOTE, SCREEN_CHANGE_LOCATION), _title(std::move(title)), _question(std::move(question)) {
     transition_ui_icon = assets->getIcon("outside");
-    createButtons(fmt::format("Travel to {}", pMapTable->pInfos[_destinationMap].name), "Stay here", UIMSG_CoopVoteAccept, UIMSG_CoopVoteDecline);
+    createButtons(acceptHint, "Not now", UIMSG_CoopVoteAccept, UIMSG_CoopVoteDecline);
 }
 
 void GUIWindow_CoopVote::Update() {
@@ -218,10 +219,9 @@ void GUIWindow_CoopVote::Update() {
     Recti window = pPrimaryWindow->frameRect;
     window.x = 493;
     window.w = 126;
-    DrawTitleText(assets->pFontCreate.get(), 0, 4, colorTable.White, pMapTable->pInfos[_destinationMap].name, 3, window);
+    DrawTitleText(assets->pFontCreate.get(), 0, 4, colorTable.White, _title, 3, window);
 
     window.x = SIDE_TEXT_BOX_POS_X;
     window.w = SIDE_TEXT_BOX_WIDTH;
-    std::string text = fmt::format("{} wants the group to travel to {}.\n \nDo you agree?", _proposerName, pMapTable->pInfos[_destinationMap].name);
-    DrawTitleText(assets->pFontCreate.get(), 0, (212 - assets->pFontCreate->CalcTextHeight(text, window.w, 0)) / 2 + 101, colorTable.White, text, 3, window);
+    DrawTitleText(assets->pFontCreate.get(), 0, (212 - assets->pFontCreate->CalcTextHeight(_question, window.w, 0)) / 2 + 101, colorTable.White, _question, 3, window);
 }

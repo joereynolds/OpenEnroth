@@ -25,7 +25,9 @@
 #include "Engine/Tables/QuestTable.h"
 
 #include "GUI/GUIWindow.h"
+#include "GUI/GUIMessageQueue.h"
 #include "GUI/UI/UIGame.h"
+#include "GUI/UI/UIRest.h"
 #include "GUI/UI/UIStatusBar.h"
 
 #include "Utility/String/Format.h"
@@ -170,16 +172,54 @@ void CoopSession::answerVote(bool accepted) {
     }
 }
 
+bool CoopSession::interceptRest() {
+    if (std::exchange(_restApproved, false))
+        return false;
+
+    if (_server) {
+        _server->requestVote(COOP_VOTE_REST);
+    } else {
+        _client->requestVote(COOP_VOTE_REST);
+    }
+    engine->_statusBar->setEvent("Asked the others to rest");
+    return true;
+}
+
 void CoopSession::handleVoteDecision(const CoopVoteDecision &decision) {
+    if (decision.kind == COOP_VOTE_REST) {
+        handleRestDecision(decision);
+        return;
+    }
+
     std::string mapName = pMapTable->pInfos[decision.destination.map()].name;
     if (decision.approved) {
         _travelApproved = true;
         startMapTransition(decision.destination);
     } else if (decision.voteId == -1) {
-        engine->_statusBar->setEvent(fmt::format("Can't travel to {} while another trip is being voted on", mapName));
+        engine->_statusBar->setEvent(fmt::format("Can't travel to {} while another vote is going on", mapName));
     } else {
         engine->_statusBar->setEvent(fmt::format("{} doesn't want to travel to {}", decision.declinedBy, mapName));
     }
+}
+
+void CoopSession::handleRestDecision(const CoopVoteDecision &decision) {
+    if (!decision.approved) {
+        if (decision.voteId == -1) {
+            engine->_statusBar->setEvent("Can't rest while another vote is going on");
+        } else {
+            engine->_statusBar->setEvent(fmt::format("{} doesn't want to rest", decision.declinedBy));
+        }
+        return;
+    }
+
+    if (current_screen_type == SCREEN_GAME)
+        pGUIWindow_CurrentMenu = std::make_unique<GUIWindow_Rest>();
+    if (current_screen_type != SCREEN_REST) {
+        engine->_statusBar->setEvent("The group rested while you were busy"); // In a shop or a dialogue, the rest window can't open over it.
+        return;
+    }
+    _restApproved = true;
+    engine->_messageQueue->addMessageNextFrame(UIMSG_Rest8Hour, 0, 0);
 }
 
 static CoopActorState actorState(int index, const Actor &actor) {

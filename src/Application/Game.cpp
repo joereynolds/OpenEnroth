@@ -1150,6 +1150,8 @@ void Game::processQueuedMessages() {
                 pParty->activeCharacter().playReaction(SPEECH_CANT_REST_HERE);
                 continue;
             case UIMSG_Rest8Hour:
+                if (coopSession && currentRestType == REST_NONE && coopSession->interceptRest())
+                    continue;
                 if (currentRestType != REST_NONE) {
                     engine->_statusBar->setEvent(LSTR_YOU_ARE_ALREADY_RESTING);
                     pAudioPlayer->playUISound(SOUND_error);
@@ -1525,7 +1527,13 @@ void Game::showCoopVote() {
     bool voteWindowOpen = pDialogueWindow && pDialogueWindow->eWindowType == WINDOW_COOP_VOTE;
     const std::optional<CoopVote> &vote = coopSession->pendingVote();
     if (vote && !voteWindowOpen && !pDialogueWindow && current_screen_type == SCREEN_GAME) {
-        pDialogueWindow = std::make_unique<GUIWindow_CoopVote>(vote->proposerName, vote->destination.map());
+        if (vote->kind == COOP_VOTE_REST) {
+            pDialogueWindow = std::make_unique<GUIWindow_CoopVote>("Rest", fmt::format("{} wants the group to rest for eight hours.\n \nDo you agree?", vote->proposerName), "Rest");
+        } else {
+            std::string mapName = pMapTable->pInfos[vote->destination.map()].name;
+            pDialogueWindow = std::make_unique<GUIWindow_CoopVote>(mapName, fmt::format("{} wants the group to travel to {}.\n \nDo you agree?", vote->proposerName, mapName),
+                                                                   fmt::format("Travel to {}", mapName));
+        }
     } else if (!vote && voteWindowOpen) { // Someone else refused before the local player answered.
         DialogueEnding();
         current_screen_type = SCREEN_GAME;

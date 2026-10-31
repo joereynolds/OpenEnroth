@@ -1134,3 +1134,99 @@ GAME_TEST(Coop, GuestGroundItemPickupReachesHost) {
     EXPECT_EQ(pSpriteObjects[83].uObjectDescID, 0);
     EXPECT_EQ(taken[0].pos, pSpriteObjects[83].vPosition); // Taking an item leaves its last position behind.
 }
+
+GAME_TEST(Coop, RestNeedsEveryonesAgreement) {
+    // Resting in co-op asks the other players first. The host rests once the guest agrees, and doesn't when the guest
+    // refuses, with a message saying who refused.
+    for (bool accept : {false, true}) {
+        SCOPED_TRACE(fmt::format("accept={}", accept));
+        test.prepareForNextTest();
+        auto timeTape = tapes.time();
+        auto statusTape = tapes.statusBar();
+        engine->config->debug.NoActors.setValue(true);
+        game.startNewGame();
+        coopSession = CoopSession::host(0, 4);
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+        for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+        test.startTaping();
+
+        game.pressAndReleaseKey(PlatformKey::KEY_R);
+        game.tick();
+        game.pressGuiButton("Rest_RestAndHeal");
+        for (int i = 0; i < 100 && !guest.pendingVote(); i++) { // The guest sends what it queued only when updated.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_TRUE(guest.pendingVote());
+        EXPECT_EQ(guest.pendingVote()->kind, COOP_VOTE_REST);
+
+        guest.answerVote(accept);
+        for (int i = 0; i < 100 && (accept ? current_screen_type == SCREEN_REST : !statusTape.contains("Guest doesn't want to rest")); i++) {
+            guest.update();
+            game.tick(); // The rest plays out in the rest window, a few game hours a frame.
+        }
+
+        EXPECT_CONTAINS(statusTape, "Asked the others to rest");
+        if (accept) {
+            EXPECT_GE(timeTape.back() - timeTape.front(), Duration::fromHours(8));
+        } else {
+            EXPECT_LT(timeTape.back() - timeTape.front(), Duration::fromHours(1));
+            EXPECT_CONTAINS(statusTape, "Guest doesn't want to rest");
+        }
+    }
+}
+
+GAME_TEST(Coop, GuestRestsWhenGroupAgrees) {
+    // A guest asked to rest by the host rests too once it agrees.
+    auto timeTape = tapes.time();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    test.startTaping();
+
+    server.requestVote(COOP_VOTE_REST);
+    for (int i = 0; i < 100 && current_screen_type != SCREEN_CHANGE_LOCATION; i++) {
+        server.update();
+        game.tick();
+    }
+    game.pressGuiButton("Transition_Yes");
+    bool rested = false;
+    for (int i = 0; i < 200 && !rested; i++) { // The rest plays out in the rest window, a few game hours a frame.
+        server.update();
+        game.tick();
+        rested = timeTape.back() - timeTape.front() >= Duration::fromHours(8) && current_screen_type == SCREEN_GAME;
+    }
+
+    EXPECT_TRUE(rested);
+}
+
+GAME_TEST(Coop, NoTurnBasedModeInCoop) {
+    // Turn-based mode can't be switched on in a co-op game, the other players' games wouldn't take turns.
+    auto turnBasedTape = tapes.turnBasedMode();
+    auto statusTape = tapes.statusBar();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    test.startTaping();
+
+    game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
+    game.tick();
+
+    EXPECT_EQ(turnBasedTape, tape(false));
+    EXPECT_CONTAINS(statusTape, "Turn-based mode isn't available in co-op");
+}

@@ -89,6 +89,14 @@ class CoopSession {
     [[nodiscard]] bool interceptMapChange();
 
     /**
+     * Should be called when the local player asks to rest. Resting moves the world's clock, so the whole group has to
+     * agree first, and the session starts the rest on every player's side once the vote passes.
+     *
+     * @return                          Whether the session took over the rest, the caller must then not rest now.
+     */
+    [[nodiscard]] bool interceptRest();
+
+    /**
      * @return                          Trip that's waiting for the local player's answer, if any.
      */
     [[nodiscard]] const std::optional<CoopVote> &pendingVote() const;
@@ -107,6 +115,7 @@ class CoopSession {
     [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const;
     void sendLocalPose(const CoopPartyPose &pose);
     void handleVoteDecision(const CoopVoteDecision &decision);
+    void handleRestDecision(const CoopVoteDecision &decision);
     void sendActorStates();
     void applyActorStates();
     void applyActorDamage();
@@ -133,6 +142,7 @@ class CoopSession {
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;
     bool _travelApproved = false;
+    bool _restApproved = false;
     std::vector<CoopActorState> _lastSentActors;
     MapId _lastSentActorsMap = MAP_INVALID;
     std::chrono::steady_clock::time_point _lastFullActorUpdate;
