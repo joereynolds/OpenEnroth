@@ -81,7 +81,7 @@ void CoopServer::handleHello(NetPeerId peer, const CoopHello &hello) {
     welcome.saveGame = _saveGameProvider();
     send(peer, NET_CHANNEL_RELIABLE, std::move(welcome));
 
-    // Reliable, a pose lost here isn't made up for until that party moves again.
+    // Reliable, so that the newcomer sees everyone on its first frame in the game.
     if (_localPose)
         send(peer, NET_CHANNEL_RELIABLE, *_localPose);
     for (const auto &[playerId, pose] : _remoteParties)

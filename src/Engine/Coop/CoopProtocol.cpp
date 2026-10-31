@@ -66,6 +66,7 @@ static void serializeBody(const CoopPartyPose &src, OutputStream *dst) {
     serialize(src.pos.z, dst);
     serializeInt(src.yaw, dst);
     serializeInt(src.pitch, dst);
+    serialize(static_cast<uint8_t>(src.walking), dst);
 }
 
 static void deserializeBody(InputStream &src, CoopPartyPose *dst) {
@@ -76,6 +77,7 @@ static void deserializeBody(InputStream &src, CoopPartyPose *dst) {
     deserialize(src, &dst->pos.z);
     dst->yaw = deserializeInt(src);
     dst->pitch = deserializeInt(src);
+    dst->walking = fromStream<uint8_t>(src) != 0;
 }
 
 static void serializeBody(const CoopPlayerLeft &src, OutputStream *dst) {

@@ -1,0 +1,77 @@
+#pragma once
+
+#include <chrono>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string_view>
+
+#include "Library/Geometry/Vec.h"
+
+#include "CoopProtocol.h"
+
+class CoopClient;
+class CoopServer;
+
+/**
+ * Connects a co-op session to the running game. Sends the local party's pose to the other players, and keeps
+ * `Engine::_remoteParties` in sync with theirs.
+ */
+class CoopSession {
+ public:
+    ~CoopSession();
+
+    /**
+     * @param port                      Port to listen on, zero picks a free one.
+     * @param maxClients                Maximal number of simultaneously connected clients.
+     * @return                          Host session. Clients that join get the current game as a save.
+     * @throws Exception                If the port couldn't be bound.
+     */
+    [[nodiscard]] static std::unique_ptr<CoopSession> host(int port, int maxClients);
+
+    /**
+     * @param address                   Host name or IP address of the host.
+     * @param port                      Port the host is listening on.
+     * @param playerName                Name to show to the other players.
+     * @return                          Client session that has started connecting. Drive `client()` until it has
+     *                                  joined, then load the save it received before calling `update`.
+     * @throws Exception                If the address couldn't be resolved.
+     */
+    [[nodiscard]] static std::unique_ptr<CoopSession> join(std::string_view address, int port, std::string_view playerName);
+
+    /**
+     * @return                          Server of a host session, `nullptr` for a client session.
+     */
+    [[nodiscard]] CoopServer *server() const {
+        return _server.get();
+    }
+
+    /**
+     * @return                          Client of a client session, `nullptr` for a host session.
+     */
+    [[nodiscard]] CoopClient *client() const {
+        return _client.get();
+    }
+
+    /**
+     * Processes network events, sends the local party's pose if needed, and refreshes `Engine::_remoteParties`.
+     * Should be called once per frame while a game is running.
+     */
+    void update();
+
+ private:
+    CoopSession();
+
+    [[nodiscard]] CoopPartyPose localPose();
+    [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const;
+    void sendLocalPose(const CoopPartyPose &pose);
+
+ private:
+    std::unique_ptr<CoopServer> _server;
+    std::unique_ptr<CoopClient> _client;
+    std::optional<Vec3f> _lastFramePos;
+    std::optional<CoopPartyPose> _lastSentPose;
+    std::chrono::steady_clock::time_point _lastSendTime;
+};
+
+extern std::unique_ptr<CoopSession> coopSession;

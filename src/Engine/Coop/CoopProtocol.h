@@ -36,6 +36,9 @@ struct CoopPartyPose {
     Vec3f pos;
     int yaw = 0;
     int pitch = 0;
+    bool walking = false;
+
+    friend bool operator==(const CoopPartyPose &l, const CoopPartyPose &r) = default;
 };
 
 /** Host to clients, a player has disconnected. */

@@ -54,6 +54,7 @@ UNIT_TEST(CoopProtocol, PartyPoseRoundTrip) {
     pose.pos = Vec3f(-1234.5f, 678.25f, 96.0f);
     pose.yaw = 1536;
     pose.pitch = -64;
+    pose.walking = true;
 
     CoopPartyPose decoded = roundTrip(pose);
     EXPECT_EQ(decoded.playerId, 2);
@@ -61,6 +62,7 @@ UNIT_TEST(CoopProtocol, PartyPoseRoundTrip) {
     EXPECT_EQ(decoded.pos, Vec3f(-1234.5f, 678.25f, 96.0f));
     EXPECT_EQ(decoded.yaw, 1536);
     EXPECT_EQ(decoded.pitch, -64);
+    EXPECT_TRUE(decoded.walking);
 }
 
 UNIT_TEST(CoopProtocol, PlayerLeftRoundTrip) {

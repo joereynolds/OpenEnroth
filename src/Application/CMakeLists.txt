@@ -24,6 +24,7 @@ target_link_libraries(application
         PUBLIC
         engine
         engine_components_control
+        engine_coop
         engine_components_trace
         engine_graphics
         engine_graphics_renderer

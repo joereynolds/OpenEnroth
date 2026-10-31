@@ -13,6 +13,7 @@
 
 #include "Engine/AssetsManager.h"
 #include "Engine/Engine.h"
+#include "Engine/Coop/CoopSession.h"
 #include "Engine/EngineCallObserver.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Interaction.h"
@@ -158,6 +159,8 @@ int Game::run() {
             startingState = "MainMenu";
         }
     } while (true);
+
+    coopSession.reset();
 
     // Clean up primary window should be the only one left now
     assert(lWindowList.size() == 1);
@@ -1571,6 +1574,9 @@ void Game::gameLoop() {
             }
 
             pAudioPlayer->UpdateSounds();
+
+            if (coopSession)
+                coopSession->update();
 
             GameUI_WritePointedObjectStatusString();
             engine->_statusBar->update();
