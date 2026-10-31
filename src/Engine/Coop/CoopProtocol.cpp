@@ -238,6 +238,18 @@ static void deserializeBody(InputStream &src, CoopActorStates *dst) {
     }
 }
 
+static void serializeBody(const CoopActorDamage &src, OutputStream *dst) {
+    serialize(std::to_underlying(src.map), dst);
+    serializeInt(src.index, dst);
+    serializeInt(src.damage, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopActorDamage *dst) {
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->index = deserializeInt(src);
+    dst->damage = deserializeInt(src);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

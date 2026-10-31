@@ -36,6 +36,7 @@ CoopSession::CoopSession() = default;
 CoopSession::~CoopSession() {
     engine->_remoteParties.clear();
     engine->_actorsFollowHost = false;
+    engine->_actorHitsForHost.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -87,8 +88,10 @@ void CoopSession::update() {
     }
 
     if (_server) {
+        applyActorDamage();
         sendActorStates();
     } else {
+        sendActorHits();
         applyActorStates();
     }
 
@@ -242,6 +245,25 @@ void CoopSession::applyActorStates() {
             actor.currentActionLength = state.actionLength;
         }
     }
+}
+
+void CoopSession::applyActorDamage() {
+    for (const CoopActorDamage &damage : _server->takeActorDamage()) {
+        if (damage.map != engine->_currentLoadedMapId || damage.index < 0 || damage.index >= std::ssize(pActors))
+            continue; // The host has moved on to another map since.
+
+        Actor &actor = pActors[damage.index];
+        if (!actor.CanBeDamaged())
+            continue;
+        actor.hp -= damage.damage;
+        if (actor.hp <= 0)
+            Actor::Die(damage.index); // No experience, the guest's game gave it to the guest's party.
+    }
+}
+
+void CoopSession::sendActorHits() {
+    for (const ActorHit &hit : std::exchange(engine->_actorHitsForHost, {}))
+        _client->sendActorDamage(CoopActorDamage{engine->_currentLoadedMapId, hit.actorId, hit.damage});
 }
 
 CoopPartyPose CoopSession::localPose() {

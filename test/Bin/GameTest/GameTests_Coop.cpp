@@ -18,6 +18,7 @@
 #include "Engine/Coop/CoopSession.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
 #include "Engine/Objects/Actor.h"
+#include "Engine/Objects/Character.h"
 
 #include "GUI/GUIWindow.h"
 
@@ -494,4 +495,79 @@ GAME_TEST(Coop, GuestMatchesHostMonsterList) {
     EXPECT_NE(pActors[0].aiState, Removed);
     for (int i = 1; i < std::ssize(pActors); i++)
         EXPECT_EQ(pActors[i].aiState, Removed) << "Actor " << i;
+}
+
+GAME_TEST(Coop, GuestHitsHurtHostMonsters) {
+    // Damage a guest's party deals reaches the host's monster, and a monster the guest kills dies on the host too
+    // without giving the host's party any experience.
+    auto hpTape = actorTapes.hp(0);
+    auto stateTape = actorTapes.aiState(0);
+    auto expTape = tapes.totalExperience();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    game.spawnMonster(pParty->pos + Vec3f(0, 300, 0), MONSTER_RAT_A, SPAWN_DUMMY);
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+
+    guest.sendActorDamage(CoopActorDamage{MAP_EMERALD_ISLAND, 0, 2});
+    for (int i = 0; i < 100 && pActors[0].hp == pActors[0].monsterInfo.hp; i++) { // The guest sends what it queued only when updated.
+        guest.update();
+        game.tick();
+    }
+    guest.sendActorDamage(CoopActorDamage{MAP_EMERALD_ISLAND, 0, 100});
+    for (int i = 0; i < 100 && pActors[0].aiState != Dying; i++) {
+        guest.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(hpTape, tape(4, 0)); // A giant rat has 6 hit points, dying sets them to zero.
+    EXPECT_EQ(stateTape, tape(Standing, Dying));
+    EXPECT_EQ(expTape.size(), 1);
+}
+
+GAME_TEST(Coop, GuestHitsAreSentToHost) {
+    // A guest's shot at a monster is reported to the host, with the damage it did.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Character &shooter = pParty->pCharacters[0];
+    shooter.inventory.equip(ITEM_SLOT_MAIN_HAND, Item(ITEM_BLASTER));
+    shooter.setSkillValue(SKILL_BLASTER, CombinedSkillValue(10, MASTERY_GRANDMASTER));
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    game.spawnMonster(pParty->pos + Vec3f(0, 80, 0), MONSTER_RAT_A, SPAWN_DUMMY); // Right in front of the party.
+    auto statusTape = tapes.statusBar();
+    test.startTaping();
+
+    game.pressAndReleaseKey(PlatformKey::KEY_A);
+    game.tick();
+    std::vector<CoopActorDamage> damage;
+    for (int i = 0; i < 100 && damage.empty(); i++) {
+        server.update();
+        damage = server.takeActorDamage();
+        game.tick();
+    }
+
+    ASSERT_EQ(damage.size(), 1);
+    EXPECT_EQ(damage[0].map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(damage[0].index, 0);
+    EXPECT_CONTAINS(statusTape, fmt::format("{} inflicts {} points killing Giant Rat", shooter.name, damage[0].damage));
 }

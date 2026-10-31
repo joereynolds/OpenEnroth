@@ -104,9 +104,16 @@ struct CoopActorStates {
     std::vector<CoopActorState> actors; // Only the monsters that changed, unless this is a periodic full update.
 };
 
+/** Client to host, the client's party hurt a monster on the client's map. */
+struct CoopActorDamage {
+    MapId map = MAP_INVALID;
+    int index = -1; // Index in the map's actor list.
+    int damage = 0; // Already reduced by the monster's resistances.
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
-                                 CoopActorStates>;
+                                 CoopActorStates, CoopActorDamage>;
 
 /**
  * @param message                       Message to encode.

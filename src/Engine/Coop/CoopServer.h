@@ -7,6 +7,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "Library/Net/NetHost.h"
 
@@ -73,6 +74,12 @@ class CoopServer {
     void sendActorStates(const CoopActorStates &states);
 
     /**
+     * @return                          Damage that clients' parties dealt to monsters since the last call, oldest
+     *                                  first.
+     */
+    [[nodiscard]] std::vector<CoopActorDamage> takeActorDamage();
+
+    /**
      * Proposes that the group travels, on behalf of the host. Everyone else is asked, and the outcome is reported by
      * `takeTravelDecision`. With nobody else around the trip is approved right away.
      *
@@ -136,4 +143,5 @@ class CoopServer {
     int _nextVoteId = 1;
     std::optional<CoopTravelVote> _hostVote;
     std::optional<CoopTravelDecision> _hostDecision;
+    std::vector<CoopActorDamage> _actorDamage;
 };

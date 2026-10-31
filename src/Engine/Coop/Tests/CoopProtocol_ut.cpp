@@ -174,6 +174,19 @@ UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
     EXPECT_EQ(first.actionLength, Duration::fromTicks(128));
 }
 
+UNIT_TEST(CoopProtocol, ActorDamageRoundTrip) {
+    // Actor damage keeps the map, the actor and the amount.
+    CoopActorDamage damage;
+    damage.map = MAP_DEYJA;
+    damage.index = 9;
+    damage.damage = 123;
+
+    CoopActorDamage decoded = roundTrip(damage);
+    EXPECT_EQ(decoded.map, MAP_DEYJA);
+    EXPECT_EQ(decoded.index, 9);
+    EXPECT_EQ(decoded.damage, 123);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

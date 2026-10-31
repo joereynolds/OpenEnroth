@@ -83,6 +83,13 @@ std::optional<CoopTravelDecision> CoopClient::takeTravelDecision() {
     return std::exchange(_travelDecision, std::nullopt);
 }
 
+void CoopClient::sendActorDamage(const CoopActorDamage &damage) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(damage));
+}
+
 std::vector<CoopActorStates> CoopClient::takeActorStates() {
     return std::exchange(_actorStates, {});
 }

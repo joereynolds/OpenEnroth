@@ -109,6 +109,8 @@ class CoopSession {
     void handleTravelDecision(const CoopTravelDecision &decision);
     void sendActorStates();
     void applyActorStates();
+    void applyActorDamage();
+    void sendActorHits();
 
  private:
     std::unique_ptr<CoopServer> _server;

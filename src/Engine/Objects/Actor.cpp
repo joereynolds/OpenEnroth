@@ -3148,6 +3148,8 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
         }
     }
     pMonster->hp -= uDamageAmount;
+    if (engine->_actorsFollowHost && uDamageAmount != 0)
+        engine->_actorHitsForHost.push_back(ActorHit{static_cast<int>(uActorID_Monster), static_cast<int>(uDamageAmount)});
     if (uDamageAmount == 0 && !hit_will_stun) {
         character->playReaction(SPEECH_ATTACK_MISS);
         return 0;

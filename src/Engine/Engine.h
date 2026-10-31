@@ -10,6 +10,7 @@
 
 #include "Engine/Evt/EvtProgram.h"
 #include "Engine/MapEnums.h"
+#include "Engine/ActorHit.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/RemoteParty.h"
 #include "Engine/mm7_data.h"
@@ -155,6 +156,7 @@ class Engine {
     std::string _pendingLoadFileName; // Savegame to load when the main menu FSM exits into the game loop.
     std::vector<RemoteParty> _remoteParties; // Other co-op players' parties on the current map.
     bool _actorsFollowHost = false; // Co-op guest, the monsters do what the host's game says instead of acting on their own.
+    std::vector<ActorHit> _actorHitsForHost; // Co-op guest, damage the local party dealt that the host's game has to deal too.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

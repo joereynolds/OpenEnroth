@@ -89,6 +89,13 @@ class CoopClient {
     }
 
     /**
+     * Tells the host that this client's party hurt a monster. Does nothing until joined.
+     *
+     * @param damage                    Which monster took how much damage.
+     */
+    void sendActorDamage(const CoopActorDamage &damage);
+
+    /**
      * @return                          Monster states received from the host since the last call, oldest first.
      */
     [[nodiscard]] std::vector<CoopActorStates> takeActorStates();

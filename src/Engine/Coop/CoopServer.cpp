@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "Library/Logger/Logger.h"
 
@@ -58,6 +59,10 @@ void CoopServer::sendActorStates(const CoopActorStates &states) {
     sendToJoined(NET_CHANNEL_UNRELIABLE, states);
 }
 
+std::vector<CoopActorDamage> CoopServer::takeActorDamage() {
+    return std::exchange(_actorDamage, {});
+}
+
 void CoopServer::requestTravel(const MapDestination &destination) {
     startVote(HOST_PLAYER_ID, -1, destination);
 }
@@ -84,6 +89,8 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
         handlePartyPose(peer, std::move(*pose));
     } else if (const CoopTravelRequest *request = std::get_if<CoopTravelRequest>(&message)) {
         startVote(_clients[peer].playerId, peer, request->destination);
+    } else if (CoopActorDamage *damage = std::get_if<CoopActorDamage>(&message)) {
+        _actorDamage.push_back(std::move(*damage));
     } else if (const CoopTravelAnswer *answer = std::get_if<CoopTravelAnswer>(&message)) {
         if (_vote && _vote->id == answer->voteId) // Answers to a vote that has already ended are dropped.
             recordAnswer(_clients[peer].playerId, answer->accepted);

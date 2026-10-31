@@ -24,6 +24,7 @@ set(ENGINE_SOURCES
         Seasons.cpp)
 
 set(ENGINE_HEADERS
+        ActorHit.h
         ArenaEnumFunctions.h
         ArenaEnums.h
         AssetsManager.h
