@@ -30,6 +30,7 @@ class Game {
     void closeTargetedSpellWindow();
     void onEscape();
     void onPressSpace();
+    void showCoopTravelVote();
 
  private:
     PlatformApplication *_application = nullptr;

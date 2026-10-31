@@ -782,6 +782,14 @@ void Game::processQueuedMessages() {
                 }
                 continue;
             }
+            case UIMSG_CoopTravelAccept:
+            case UIMSG_CoopTravelDecline:
+                PlayButtonClickSound();
+                DialogueEnding();
+                current_screen_type = SCREEN_GAME;
+                if (coopSession)
+                    coopSession->answerTravel(uMessage == UIMSG_CoopTravelAccept);
+                continue;
             case UIMSG_CancelTravelByFoot:
                 PlayButtonClickSound();
                 pParty->pos.x = std::clamp(pParty->pos.x, -maxPartyAxisDistance, maxPartyAxisDistance);
@@ -1500,6 +1508,17 @@ void Game::processQueuedMessages() {
 }
 
 //----- (0046A14B) --------------------------------------------------------
+void Game::showCoopTravelVote() {
+    bool voteWindowOpen = pDialogueWindow && pDialogueWindow->eWindowType == WINDOW_COOP_TRAVEL_VOTE;
+    const std::optional<CoopTravelVote> &vote = coopSession->pendingVote();
+    if (vote && !voteWindowOpen && !pDialogueWindow && current_screen_type == SCREEN_GAME) {
+        pDialogueWindow = std::make_unique<GUIWindow_CoopTravelVote>(vote->proposerName, vote->destination.map());
+    } else if (!vote && voteWindowOpen) { // Someone else refused before the local player answered.
+        DialogueEnding();
+        current_screen_type = SCREEN_GAME;
+    }
+}
+
 void Game::onPressSpace() {
     Pid pid = engine->PickKeyboard(engine->config->gameplay.KeyboardInteractionDepth.value(),
                                     &vis_decoration_noevent_filter, &vis_door_filter).pid;
@@ -1598,8 +1617,10 @@ void Game::gameLoop() {
 
             pAudioPlayer->UpdateSounds();
 
-            if (coopSession)
+            if (coopSession) {
                 coopSession->update();
+                showCoopTravelVote();
+            }
 
             GameUI_WritePointedObjectStatusString();
             engine->_statusBar->update();
