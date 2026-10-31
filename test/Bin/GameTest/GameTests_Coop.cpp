@@ -1,15 +1,16 @@
+#include <optional>
 #include <utility>
 
 #include "Testing/Game/GameTest.h"
 
 #include "Engine/Engine.h"
-#include "Engine/Coop/CoopClient.h"
-#include "Engine/Coop/CoopServer.h"
-#include "Engine/Coop/CoopSession.h"
 #include "Engine/MapEnums.h"
 #include "Engine/Party.h"
 #include "Engine/RemoteParty.h"
 #include "Engine/SaveLoad.h"
+#include "Engine/Coop/CoopClient.h"
+#include "Engine/Coop/CoopServer.h"
+#include "Engine/Coop/CoopSession.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
 
 #include "Utility/ScopeGuard.h"
@@ -156,4 +157,93 @@ GAME_TEST(Coop, ClientJoinsWithOwnParty) {
     EXPECT_EQ(pParty->pCharacters[0].name, "Guestina");
     EXPECT_EQ(pParty->GetGold(), 1234);
     EXPECT_EQ(pParty->pCharacters[0].pCharacterBuffs[CHARACTER_BUFF_BLESS].expireTime, hostTime + Duration::fromHours(1));
+}
+
+GAME_TEST(Coop, LeavingTheMapNeedsEveryonesAgreement) {
+    // Leaving a map in co-op asks the other players first. The host leaves once the guest agrees, and stays with a
+    // message saying who refused when the guest doesn't.
+    for (bool accept : {false, true}) {
+        SCOPED_TRACE(fmt::format("accept={}", accept));
+        test.prepareForNextTest();
+        auto mapTape = tapes.map();
+        auto statusTape = tapes.statusBar();
+        game.startNewGame();
+        game.teleportTo(MAP_HIDDEN_TOMB, Vec3f(-111, -25, 1), 0); // Just inside the entrance, facing the exit.
+        coopSession = CoopSession::host(0, 4);
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+        for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+        test.startTaping();
+
+        game.pressKey(PlatformKey::KEY_UP);
+        game.tick(10);
+        game.releaseKey(PlatformKey::KEY_UP);
+        game.pressAndReleaseKey(PlatformKey::KEY_SPACE);
+        game.tick();
+        game.pressGuiButton("Transition_Yes");
+        for (int i = 0; i < 100 && !guest.pendingVote(); i++) { // The guest sends what it queued only when updated.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_TRUE(guest.pendingVote());
+        EXPECT_EQ(guest.pendingVote()->destination.map(), MAP_ERATHIA);
+        EXPECT_EQ(engine->_currentLoadedMapId, MAP_HIDDEN_TOMB);
+
+        guest.answerTravel(accept);
+        std::optional<CoopTravelDecision> decision;
+        for (int i = 0; i < 100 && !decision; i++) {
+            guest.update();
+            game.tick();
+            decision = guest.takeTravelDecision();
+        }
+        ASSERT_TRUE(decision);
+        if (accept) {
+            game.skipLoadingScreen();
+            EXPECT_EQ(mapTape, tape(MAP_HIDDEN_TOMB, MAP_ERATHIA));
+        } else {
+            game.tick();
+            EXPECT_EQ(mapTape, tape(MAP_HIDDEN_TOMB));
+            EXPECT_CONTAINS(statusTape, "Guest doesn't want to travel to Erathia");
+        }
+        EXPECT_CONTAINS(statusTape, "Asked the others to travel to Erathia");
+    }
+}
+
+GAME_TEST(Coop, GuestFollowsAgreedTrip) {
+    // A guest that agrees to the host's trip travels to the host's destination too.
+    auto mapTape = tapes.map();
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    test.startTaping();
+
+    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    for (int i = 0; i < 100 && !coopSession->pendingVote(); i++) {
+        server.update();
+        game.tick();
+    }
+    ASSERT_TRUE(coopSession->pendingVote());
+    EXPECT_EQ(coopSession->pendingVote()->proposerName, "Host");
+
+    coopSession->answerTravel(true);
+    for (int i = 0; i < 100 && engine->_currentLoadedMapId != MAP_HARMONDALE; i++) {
+        server.update();
+        game.tick();
+    }
+    EXPECT_EQ(mapTape, tape(MAP_EMERALD_ISLAND, MAP_HARMONDALE));
+    std::optional<CoopTravelDecision> hostDecision = server.takeTravelDecision();
+    ASSERT_TRUE(hostDecision);
+    EXPECT_TRUE(hostDecision->approved);
 }

@@ -1610,6 +1610,11 @@ void Game::gameLoop() {
                 continue;
             }
 
+            if (uGameState == GAME_STATE_CHANGE_LOCATION && coopSession && coopSession->interceptMapChange()) {
+                uGameState = GAME_STATE_PLAYING;
+                continue;
+            }
+
             if (uGameState == GAME_STATE_CHANGE_LOCATION) {
                 pAudioPlayer->stopSounds();
                 PrepareWorld(0);

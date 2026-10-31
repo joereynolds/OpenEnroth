@@ -70,12 +70,35 @@ class CoopSession {
      */
     void update();
 
+    /**
+     * Should be called when the game is about to change maps, with the destination in `Engine::_pendingTransition`.
+     * A trip to another map that the group hasn't agreed on yet is put to a vote instead. The session starts the
+     * map change itself once the vote passes.
+     *
+     * @return                          Whether the session took over the map change, the caller must then go back to
+     *                                  playing instead of loading the destination.
+     */
+    [[nodiscard]] bool interceptMapChange();
+
+    /**
+     * @return                          Trip that's waiting for the local player's answer, if any.
+     */
+    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const;
+
+    /**
+     * Answers the vote returned by `pendingVote` on behalf of the local player.
+     *
+     * @param accepted                  Whether the local player agrees to travel.
+     */
+    void answerTravel(bool accepted);
+
  private:
     CoopSession();
 
     [[nodiscard]] CoopPartyPose localPose();
     [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const;
     void sendLocalPose(const CoopPartyPose &pose);
+    void handleTravelDecision(const CoopTravelDecision &decision);
 
  private:
     std::unique_ptr<CoopServer> _server;
@@ -84,6 +107,7 @@ class CoopSession {
     std::optional<Vec3f> _lastFramePos;
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;
+    bool _travelApproved = false;
 };
 
 extern std::unique_ptr<CoopSession> coopSession;
