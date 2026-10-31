@@ -22,8 +22,10 @@
 #include "Engine/Graphics/Renderer/Renderer.h"
 #include "Engine/Objects/Actor.h"
 #include "Engine/Objects/Character.h"
+#include "Engine/Objects/Chest.h"
 
 #include "GUI/GUIWindow.h"
+#include "GUI/UI/UIChest.h"
 
 #include "Library/Platform/Application/PlatformApplication.h"
 #include "Library/Platform/Interface/PlatformEvents.h"
@@ -971,4 +973,88 @@ GAME_TEST(Coop, GuestQuestRewardsReachHost) {
     ASSERT_EQ(rewards[0].rewards.size(), 1);
     EXPECT_EQ(rewards[0].rewards[0].variable, VAR_PlayerItemInHands);
     EXPECT_EQ(rewards[0].rewards[0].value, std::to_underlying(ITEM_COLONY_ZOD_KEY));
+}
+
+GAME_TEST(Coop, ChestsAreShared) {
+    // A chest one guest emptied a bit is emptied the same way in the host's game and the other guests' games.
+    game.startNewGame();
+    int chestId = 0;
+    while (chestId < std::ssize(vChests) && vChests[chestId].inventory.size() == 0)
+        chestId++;
+    ASSERT_LT(chestId, std::ssize(vChests));
+    auto chestItemsTape = tapes.custom([&] { return vChests[chestId].inventory.size(); });
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient taker("127.0.0.1", coopSession->server()->port(), "Taker");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (taker.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        taker.update();
+        other.update();
+    }
+    ASSERT_EQ(taker.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the chest before the change.
+
+    CoopChest taken{.map = MAP_EMERALD_ISLAND, .chestId = chestId, .chest = vChests[chestId]};
+    taken.chest.inventory.take(*taken.chest.inventory.entries().begin());
+    taker.sendChest(taken);
+    std::vector<CoopChest> relayed;
+    for (int i = 0; i < 100 && relayed.empty(); i++) { // The taker sends what it queued only when updated.
+        taker.update();
+        game.tick();
+        other.update();
+        relayed = other.takeChests();
+    }
+
+    int before = chestItemsTape.front();
+    EXPECT_EQ(chestItemsTape, tape(before, before - 1));
+    ASSERT_EQ(relayed.size(), 1);
+    EXPECT_EQ(relayed[0].chestId, chestId);
+    EXPECT_EQ(relayed[0].chest.inventory.size(), before - 1);
+}
+
+GAME_TEST(Coop, GuestChestChangesReachHost) {
+    // Opening a chest and grabbing an item from it in a guest's game sends the chest to the host each time.
+    game.startNewGame();
+    game.teleportTo(MAP_EMERALD_ISLAND, Vec3f(8600, 5200, 1), 90); // Next to a chest, facing it.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    auto screenTape = tapes.screen();
+    test.startTaping();
+
+    std::vector<CoopChest> chests;
+    auto collect = [&] {
+        for (int i = 0; i < 100 && chests.empty(); i++) {
+            server.update();
+            chests = server.takeChests();
+            game.tick();
+        }
+    };
+    game.pressAndReleaseKey(PlatformKey::KEY_SPACE);
+    game.tick();
+    collect();
+    ASSERT_EQ(screenTape.back(), SCREEN_CHEST);
+    ASSERT_EQ(chests.size(), 1);
+    int chestId = pGUIWindow_CurrentChest->chestId();
+    EXPECT_EQ(chests[0].chestId, chestId);
+    EXPECT_EQ(chests[0].chest.inventory.size(), vChests[chestId].inventory.size());
+    int itemsBefore = vChests[chestId].inventory.size();
+
+    chests.clear();
+    game.pressAndReleaseKey(PlatformKey::KEY_SPACE); // Grabs an item.
+    game.tick();
+    collect();
+    ASSERT_EQ(chests.size(), 1);
+    EXPECT_EQ(chests[0].chest.inventory.size(), itemsBefore - 1);
+    EXPECT_EQ(vChests[chestId].inventory.size(), itemsBefore - 1);
 }

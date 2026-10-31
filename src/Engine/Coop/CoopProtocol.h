@@ -10,6 +10,7 @@
 #include "Engine/PartyEnums.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/Objects/ActorEnums.h"
+#include "Engine/Objects/Chest.h"
 #include "Engine/Objects/Item.h"
 #include "Engine/Objects/MonsterEnums.h"
 
@@ -150,10 +151,18 @@ struct CoopQuestRewards {
     std::vector<QuestReward> rewards;
 };
 
+/** A chest one player's game changed, everyone takes over its contents. Relayed like `CoopQuestBit`. */
+struct CoopChest {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    int chestId = -1;
+    Chest chest; // Position is left out, every game works it out on its own.
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
-                                 CoopQuestBit, CoopQuestRewards>;
+                                 CoopQuestBit, CoopQuestRewards, CoopChest>;
 
 /**
  * @param message                       Message to encode.

@@ -106,6 +106,18 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopQuestRewards> takeQuestRewards();
 
     /**
+     * Sends a chest's contents to every client except the one whose game changed them.
+     *
+     * @param chest                     The chest, with the id of the player whose game changed it.
+     */
+    void sendChest(const CoopChest &chest);
+
+    /**
+     * @return                          Chests clients changed since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopChest> takeChests();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -193,4 +205,5 @@ class CoopServer {
     std::vector<CoopLootRequest> _lootRequests;
     std::vector<CoopQuestBit> _questBits;
     std::vector<CoopQuestRewards> _questRewards;
+    std::vector<CoopChest> _chests;
 };

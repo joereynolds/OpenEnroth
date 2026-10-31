@@ -125,6 +125,18 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopQuestRewards> takeQuestRewards();
 
     /**
+     * Tells the host that this client's game changed a chest. Does nothing until joined.
+     *
+     * @param chest                     The chest.
+     */
+    void sendChest(const CoopChest &chest);
+
+    /**
+     * @return                          Chests the other players changed since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopChest> takeChests();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -191,4 +203,5 @@ class CoopClient {
     std::vector<CoopLoot> _loot;
     std::vector<CoopQuestBit> _questBits;
     std::vector<CoopQuestRewards> _questRewards;
+    std::vector<CoopChest> _chests;
 };

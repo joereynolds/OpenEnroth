@@ -16,6 +16,7 @@
 #include "Engine/Evt/EvtVariables.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Objects/Actor.h"
+#include "Engine/Objects/Chest.h"
 #include "Engine/Objects/Character.h"
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
@@ -50,6 +51,7 @@ CoopSession::~CoopSession() {
     engine->_coopSessionActive = false;
     engine->_questBitChanges.clear();
     engine->_questRewards.clear();
+    engine->_changedChests.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -116,6 +118,7 @@ void CoopSession::update() {
 
     syncQuestBits();
     syncQuestRewards();
+    syncChests();
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
     if (decision)
@@ -423,6 +426,33 @@ void CoopSession::syncQuestRewards() {
                 addEvtVariable(pParty->pCharacters[reward.characterIndex], reward.variable, reward.value);
         if (_server)
             _server->sendQuestRewards(rewards);
+    }
+}
+
+void CoopSession::syncChests() {
+    std::vector<int> local = std::exchange(engine->_changedChests, {});
+    std::ranges::sort(local);
+    local.erase(std::unique(local.begin(), local.end()), local.end());
+    for (int chestId : local) {
+        CoopChest chest{.map = engine->_currentLoadedMapId, .chestId = chestId, .chest = vChests[chestId]};
+        if (_server) {
+            chest.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendChest(chest);
+        } else {
+            _client->sendChest(chest);
+        }
+    }
+
+    std::vector<CoopChest> remote = _server ? _server->takeChests() : _client->takeChests();
+    for (const CoopChest &chest : remote) {
+        if (chest.map == engine->_currentLoadedMapId && chest.chestId >= 0 && chest.chestId < std::ssize(vChests)) {
+            Chest &target = vChests[chest.chestId];
+            target.chestTypeId = chest.chest.chestTypeId;
+            target.flags = chest.chest.flags;
+            target.inventory = chest.chest.inventory;
+        }
+        if (_server)
+            _server->sendChest(chest); // Even from another map, a guest there may share it with the sender.
     }
 }
 

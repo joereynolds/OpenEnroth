@@ -349,6 +349,24 @@ static void deserializeBody(InputStream &src, CoopQuestRewards *dst) {
     }
 }
 
+static void serializeBody(const CoopChest &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.map), dst);
+    serializeInt(src.chestId, dst);
+    Chest_MM7 snapshotChest;
+    snapshot(src.chest, &snapshotChest);
+    serialize(snapshotChest, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopChest *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->chestId = deserializeInt(src);
+    Chest_MM7 snapshotChest;
+    deserialize(src, &snapshotChest);
+    reconstruct(snapshotChest, &dst->chest, tags::context(dst->chestId));
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

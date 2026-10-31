@@ -38,6 +38,11 @@
 
 std::vector<Chest> vChests;
 
+static void chestChanged(int chestId) {
+    if (engine->_coopSessionActive)
+        engine->_changedChests.push_back(chestId); // Co-op players share the chests on a map.
+}
+
 bool Chest::open(int uChestID, Pid objectPid) {
     double dir_x;
     double dir_y;
@@ -135,6 +140,7 @@ bool Chest::open(int uChestID, Pid objectPid) {
                 pParty->setDelayedReaction(SPEECH_TRAP_EXPLODED, pParty->activeCharacterIndex());
             }
             OpenedTelekinesis = false;
+            chestChanged(uChestID);
             return false;
         }
         chest->flags &= ~CHEST_TRAPPED;
@@ -149,6 +155,7 @@ bool Chest::open(int uChestID, Pid objectPid) {
     OpenedTelekinesis = false;
 
     pGUIWindow_CurrentChest = std::make_unique<GUIWindow_Chest>(uChestID);
+    chestChanged(uChestID);
 
     return true;
 }
@@ -249,6 +256,7 @@ void Chest::OnChestLeftClick() {
 
         if (pos) {
             chest->inventory.add(*pos, pParty->takeHoldingItem());
+            chestChanged(uChestID);
         }
     } else {
         if (InventoryEntry entry = chest->inventory.entry(inventoryPos)) {
@@ -267,6 +275,7 @@ void Chest::OnChestLeftClick() {
 
             if (engine->config->gameplay.ChestTryPlaceItems.value() == 2)
                 Chest::PlaceItems(uChestID);
+            chestChanged(uChestID);
         }
     }
 }
@@ -312,6 +321,7 @@ void Chest::GrabItem(bool all) {  // new function to grab items from chest using
 
     if (engine->config->gameplay.ChestTryPlaceItems.value() == 2)
         Chest::PlaceItems(chestId);
+    chestChanged(chestId);
 
     if (grabcount > 1 || goldcount > 1) {  // found items
         engine->_statusBar->setEvent(fmt::format("You found {} item(s) and {} Gold!", grabcount, goldamount));

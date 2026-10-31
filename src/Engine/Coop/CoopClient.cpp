@@ -118,6 +118,19 @@ std::vector<CoopQuestRewards> CoopClient::takeQuestRewards() {
     return std::exchange(_questRewards, {});
 }
 
+void CoopClient::sendChest(const CoopChest &chest) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    CoopChest message = chest;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
+}
+
+std::vector<CoopChest> CoopClient::takeChests() {
+    return std::exchange(_chests, {});
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -162,6 +175,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _questBits.push_back(*change);
     } else if (CoopQuestRewards *rewards = std::get_if<CoopQuestRewards>(&message)) {
         _questRewards.push_back(std::move(*rewards));
+    } else if (CoopChest *chest = std::get_if<CoopChest>(&message)) {
+        _chests.push_back(std::move(*chest));
     } else if (CoopLoot *loot = std::get_if<CoopLoot>(&message)) {
         _loot.push_back(std::move(*loot));
     } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {

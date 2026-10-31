@@ -162,6 +162,7 @@ class Engine {
     bool _coopSessionActive = false; // A co-op game is running, local changes to the shared world are recorded for the others.
     std::vector<QuestBitChange> _questBitChanges; // Co-op, quest bits the local party's scripts changed.
     std::vector<QuestReward> _questRewards; // Co-op, what the local party's scripts gave out for quests.
+    std::vector<int> _changedChests; // Co-op, chests on the current map whose contents the local party changed.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;
