@@ -41,6 +41,12 @@ class MapDestination {
     [[nodiscard]] MapId map() const { return _map; } // MAP_INVALID means stay on the current map.
 
     /**
+     * @return                          How the party arrives: not moved at all, at a start point decoration, or at
+     *                                  an absolute placement.
+     */
+    [[nodiscard]] const std::variant<std::monostate, MapStartPoint, PartyPlacement> &arrival() const { return _arrival; }
+
+    /**
      * A `MapStartPoint` arrival names a decoration in the map that's being entered, so this can only be called once
      * that map is loaded. A `PartyPlacement` arrival is already in absolute coordinates and has no such requirement.
      *

@@ -20,6 +20,14 @@ static int deserializeInt(InputStream &src) {
     return fromStream<int32_t>(src);
 }
 
+static void serializeBool(bool value, OutputStream *dst) {
+    serialize(static_cast<uint8_t>(value), dst);
+}
+
+static bool deserializeBool(InputStream &src) {
+    return fromStream<uint8_t>(src) != 0;
+}
+
 static void serializeBlob(const Blob &value, OutputStream *dst) {
     assert(value.size() <= UINT32_MAX);
     serialize(static_cast<uint32_t>(value.size()), dst); // Same layout as an std::string, so that deserializeBlob can read it as one.
@@ -66,7 +74,7 @@ static void serializeBody(const CoopPartyPose &src, OutputStream *dst) {
     serialize(src.pos.z, dst);
     serializeInt(src.yaw, dst);
     serializeInt(src.pitch, dst);
-    serialize(static_cast<uint8_t>(src.walking), dst);
+    serializeBool(src.walking, dst);
 }
 
 static void deserializeBody(InputStream &src, CoopPartyPose *dst) {
@@ -77,7 +85,7 @@ static void deserializeBody(InputStream &src, CoopPartyPose *dst) {
     deserialize(src, &dst->pos.z);
     dst->yaw = deserializeInt(src);
     dst->pitch = deserializeInt(src);
-    dst->walking = fromStream<uint8_t>(src) != 0;
+    dst->walking = deserializeBool(src);
 }
 
 static void serializeBody(const CoopPlayerLeft &src, OutputStream *dst) {
@@ -86,6 +94,94 @@ static void serializeBody(const CoopPlayerLeft &src, OutputStream *dst) {
 
 static void deserializeBody(InputStream &src, CoopPlayerLeft *dst) {
     dst->playerId = deserializeInt(src);
+}
+
+static void serializeDestination(const MapDestination &src, OutputStream *dst) {
+    serialize(std::to_underlying(src.map()), dst);
+    serialize(static_cast<uint8_t>(src.arrival().index()), dst);
+    if (const MapStartPoint *startPoint = std::get_if<MapStartPoint>(&src.arrival())) {
+        serialize(std::to_underlying(*startPoint), dst);
+    } else if (const PartyPlacement *placement = std::get_if<PartyPlacement>(&src.arrival())) {
+        serialize(placement->pos.x, dst);
+        serialize(placement->pos.y, dst);
+        serialize(placement->pos.z, dst);
+        serializeInt(placement->yaw, dst);
+        serializeInt(placement->pitch, dst);
+        serializeInt(placement->zSpeed, dst);
+    }
+}
+
+static MapDestination deserializeDestination(InputStream &src) {
+    MapId map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    uint8_t arrival = fromStream<uint8_t>(src);
+    switch (arrival) {
+    case 0:
+        if (map != MAP_INVALID)
+            throw Exception("Coop travel destination to map {} doesn't say where to arrive", std::to_underlying(map));
+        return MapDestination();
+    case 1: {
+        MapStartPoint startPoint = static_cast<MapStartPoint>(fromStream<std::underlying_type_t<MapStartPoint>>(src));
+        if (map == MAP_INVALID)
+            throw Exception("Coop travel destination has a start point but no map");
+        return MapDestination(map, startPoint);
+    }
+    case 2: {
+        PartyPlacement placement;
+        deserialize(src, &placement.pos.x);
+        deserialize(src, &placement.pos.y);
+        deserialize(src, &placement.pos.z);
+        placement.yaw = deserializeInt(src);
+        placement.pitch = deserializeInt(src);
+        placement.zSpeed = deserializeInt(src);
+        return MapDestination(map, placement);
+    }
+    default:
+        throw Exception("Unknown coop travel arrival type {}", arrival);
+    }
+}
+
+static void serializeBody(const CoopTravelRequest &src, OutputStream *dst) {
+    serializeDestination(src.destination, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopTravelRequest *dst) {
+    dst->destination = deserializeDestination(src);
+}
+
+static void serializeBody(const CoopTravelVote &src, OutputStream *dst) {
+    serializeInt(src.voteId, dst);
+    serialize(src.proposerName, dst);
+    serializeDestination(src.destination, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopTravelVote *dst) {
+    dst->voteId = deserializeInt(src);
+    deserialize(src, &dst->proposerName);
+    dst->destination = deserializeDestination(src);
+}
+
+static void serializeBody(const CoopTravelAnswer &src, OutputStream *dst) {
+    serializeInt(src.voteId, dst);
+    serializeBool(src.accepted, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopTravelAnswer *dst) {
+    dst->voteId = deserializeInt(src);
+    dst->accepted = deserializeBool(src);
+}
+
+static void serializeBody(const CoopTravelDecision &src, OutputStream *dst) {
+    serializeInt(src.voteId, dst);
+    serializeBool(src.approved, dst);
+    serialize(src.declinedBy, dst);
+    serializeDestination(src.destination, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopTravelDecision *dst) {
+    dst->voteId = deserializeInt(src);
+    dst->approved = deserializeBool(src);
+    deserialize(src, &dst->declinedBy);
+    dst->destination = deserializeDestination(src);
 }
 
 template<size_t I = 0>

@@ -73,6 +73,69 @@ UNIT_TEST(CoopProtocol, PlayerLeftRoundTrip) {
     EXPECT_EQ(roundTrip(left).playerId, 5);
 }
 
+UNIT_TEST(CoopProtocol, TravelRequestToStartPointRoundTrip) {
+    // A travel request to a map's start point keeps the map and the start point.
+    CoopTravelRequest request;
+    request.destination = MapDestination(MAP_HARMONDALE, MAP_START_POINT_NORTH);
+
+    CoopTravelRequest decoded = roundTrip(request);
+    EXPECT_EQ(decoded.destination.map(), MAP_HARMONDALE);
+    ASSERT_TRUE(std::holds_alternative<MapStartPoint>(decoded.destination.arrival()));
+    EXPECT_EQ(std::get<MapStartPoint>(decoded.destination.arrival()), MAP_START_POINT_NORTH);
+}
+
+UNIT_TEST(CoopProtocol, TravelVoteToPlacementRoundTrip) {
+    // A travel vote to an exact placement keeps the vote id, the proposer and the whole placement.
+    CoopTravelVote vote;
+    vote.voteId = 7;
+    vote.proposerName = "Zoltan";
+    vote.destination = MapDestination(MAP_ERATHIA, PartyPlacement(Vec3f(1, -2, 3.5f), 1024, -32, 100));
+
+    CoopTravelVote decoded = roundTrip(vote);
+    EXPECT_EQ(decoded.voteId, 7);
+    EXPECT_EQ(decoded.proposerName, "Zoltan");
+    EXPECT_EQ(decoded.destination.map(), MAP_ERATHIA);
+    ASSERT_TRUE(std::holds_alternative<PartyPlacement>(decoded.destination.arrival()));
+    const PartyPlacement &placement = std::get<PartyPlacement>(decoded.destination.arrival());
+    EXPECT_EQ(placement.pos, Vec3f(1, -2, 3.5f));
+    EXPECT_EQ(placement.yaw, 1024);
+    EXPECT_EQ(placement.pitch, -32);
+    EXPECT_EQ(placement.zSpeed, 100);
+}
+
+UNIT_TEST(CoopProtocol, TravelAnswerRoundTrip) {
+    // A travel answer keeps its vote id and verdict.
+    CoopTravelAnswer answer;
+    answer.voteId = 3;
+    answer.accepted = true;
+
+    CoopTravelAnswer decoded = roundTrip(answer);
+    EXPECT_EQ(decoded.voteId, 3);
+    EXPECT_TRUE(decoded.accepted);
+}
+
+UNIT_TEST(CoopProtocol, TravelDecisionRoundTrip) {
+    // A travel decision keeps its outcome, who declined, and a destination that stays on the current map.
+    CoopTravelDecision decision;
+    decision.voteId = 4;
+    decision.declinedBy = "Gnomish";
+
+    CoopTravelDecision decoded = roundTrip(decision);
+    EXPECT_EQ(decoded.voteId, 4);
+    EXPECT_FALSE(decoded.approved);
+    EXPECT_EQ(decoded.declinedBy, "Gnomish");
+    EXPECT_EQ(decoded.destination.map(), MAP_INVALID);
+    EXPECT_TRUE(std::holds_alternative<std::monostate>(decoded.destination.arrival()));
+}
+
+UNIT_TEST(CoopProtocol, TravelToStartPointWithoutMapThrows) {
+    // A destination that names a start point but no map is rejected, the engine can't resolve it.
+    std::string wire(encodeCoopMessage(CoopTravelRequest{MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY)}).str());
+    wire[1] = 0; // The map id follows the message type, it's little endian and fits in its first byte.
+
+    EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(wire)), Exception);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);
