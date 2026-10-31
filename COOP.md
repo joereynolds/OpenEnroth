@@ -75,7 +75,7 @@ calls `coopSession->update()` once per frame, after the world update and before 
 3. On the host: apply guests' hits on monsters, hand out loot, send monster attacks on stand-ins to their guests, move
    the stand-ins, and send monster states.
    On a guest: send its own hits and loot requests, then apply monster states, monster attacks and loot from the host.
-4. Exchange quest bits, quest rewards, chests and ground item pickups.
+4. Exchange quest bits, quest rewards, chests and ground item pickups. The host sends its clock, guests follow it.
 5. Act on a finished vote.
 6. Rebuild `Engine::_remoteParties` for drawing.
 7. Flush the network, so that everything queued this frame goes out this frame instead of on the next poll.
@@ -117,6 +117,7 @@ There are three ways something gets shared:
 | Ground item pickups | Relayed | `CoopGroundItemTaken`. Matched by item kind and nearest position, since indices differ between games. |
 | Map changes | Voted | `COOP_VOTE_TRAVEL`. Every map change ends up in the game loop's `GAME_STATE_CHANGE_LOCATION` branch, and that's where it's turned into a vote. |
 | Rest | Voted | `COOP_VOTE_REST`. Once approved, every game opens the rest window and rests normally. |
+| Game time | Host-driven | `CoopClock`, every 30 game seconds. A guest more than a game minute off catches up through the normal time step, so day changes still happen, or steps back without side effects. Not while the guest rests. |
 
 ### Monsters in detail
 
@@ -206,8 +207,8 @@ Things that will bite you when writing tests:
 ## Known gaps
 
 * **Dropped items** only appear in the dropping player's game.
-* **Waiting and taverns** move only the local clock. Game clocks aren't synced at all, and they drift as players pause
-  in menus.
+* **Waiting and taverns** aren't voted on. The host's waits move everyone's clock, a guest's waits are undone by the
+  host's clock within a second.
 * **Some combat effects** a guest causes stay on the guest's copy of the monster: paralysis, stun, armor halving, and
   other spell effects that aren't plain damage. Armageddon damage isn't forwarded either.
 * **Chests and ground items** are relayed rather than host-driven, so two players grabbing the same item within one

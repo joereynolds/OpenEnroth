@@ -38,6 +38,8 @@
 
 static constexpr std::chrono::seconds POSE_HEARTBEAT{1}; // Makes up for an unreliable pose that got lost while the party stands still.
 static constexpr std::chrono::seconds FULL_ACTOR_UPDATE_INTERVAL{1}; // Makes up for lost unreliable monster updates.
+static constexpr Duration CLOCK_INTERVAL = Duration::fromSeconds(30); // A real second at normal speed.
+static constexpr Duration CLOCK_TOLERANCE = Duration::fromMinutes(1); // About two real seconds, well above network delay.
 
 std::unique_ptr<CoopSession> coopSession;
 
@@ -124,6 +126,7 @@ void CoopSession::update() {
     syncQuestRewards();
     syncChests();
     syncGroundItems();
+    syncClock();
 
     std::optional<CoopVoteDecision> decision = _server ? _server->takeVoteDecision() : _client->takeVoteDecision();
     if (decision)
@@ -535,6 +538,29 @@ void CoopSession::syncGroundItems() {
             removeGroundItem(taken.item, taken.pos);
         if (_server)
             _server->sendGroundItemTaken(taken);
+    }
+}
+
+void CoopSession::syncClock() {
+    if (_server) {
+        Time now = pParty->GetPlayingTime();
+        if (!_lastClockSendTime || now - *_lastClockSendTime >= CLOCK_INTERVAL || now < *_lastClockSendTime) {
+            _server->sendClock(CoopClock{now});
+            _lastClockSendTime = now;
+        }
+        return;
+    }
+
+    std::optional<CoopClock> clock = _client->takeClock();
+    if (!clock || currentRestType != REST_NONE)
+        return; // A rest moves the clock on its own, the next clock after it brings the guest back in line.
+
+    Duration drift = clock->playingTime - pParty->GetPlayingTime();
+    if (drift > CLOCK_TOLERANCE) {
+        _494035_timed_effects__water_walking_damage__etc(drift); // Catching up goes through the day changes it skipped.
+    } else if (drift < Duration() - CLOCK_TOLERANCE) {
+        pParty->GetPlayingTime() = clock->playingTime;
+        _494035_timed_effects__water_walking_damage__etc(Duration()); // Updates the calendar fields.
     }
 }
 

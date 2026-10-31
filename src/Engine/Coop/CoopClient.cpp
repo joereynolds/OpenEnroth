@@ -144,6 +144,10 @@ std::vector<CoopGroundItemTaken> CoopClient::takeGroundItemsTaken() {
     return std::exchange(_groundItemsTaken, {});
 }
 
+std::optional<CoopClock> CoopClient::takeClock() {
+    return std::exchange(_clock, std::nullopt);
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -192,6 +196,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _chests.push_back(std::move(*chest));
     } else if (const CoopGroundItemTaken *taken = std::get_if<CoopGroundItemTaken>(&message)) {
         _groundItemsTaken.push_back(*taken);
+    } else if (const CoopClock *clock = std::get_if<CoopClock>(&message)) {
+        _clock = *clock;
     } else if (CoopLoot *loot = std::get_if<CoopLoot>(&message)) {
         _loot.push_back(std::move(*loot));
     } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {

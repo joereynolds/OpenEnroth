@@ -402,6 +402,14 @@ static void deserializeBody(InputStream &src, CoopGroundItemTaken *dst) {
     deserialize(src, &dst->pos.z);
 }
 
+static void serializeBody(const CoopClock &src, OutputStream *dst) {
+    serialize(static_cast<int64_t>(src.playingTime.ticks()), dst);
+}
+
+static void deserializeBody(InputStream &src, CoopClock *dst) {
+    dst->playingTime = Time::fromTicks(fromStream<int64_t>(src));
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

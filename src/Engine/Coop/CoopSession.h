@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include "Core/Time/Time.h"
+
 #include "Library/Geometry/Vec.h"
 
 #include "Utility/Memory/Blob.h"
@@ -129,6 +131,7 @@ class CoopSession {
     void syncQuestRewards();
     void syncChests();
     void syncGroundItems();
+    void syncClock();
     void sendActorHits();
 
  private:
@@ -148,6 +151,7 @@ class CoopSession {
     std::chrono::steady_clock::time_point _lastFullActorUpdate;
     std::map<int, int> _standIns; // Player id to the index of the actor that stands in for that player's party.
     MapId _standInsMap = MAP_INVALID;
+    std::optional<Time> _lastClockSendTime; // Game time, so that the clock goes out as often in tests as in play.
 };
 
 extern std::unique_ptr<CoopSession> coopSession;

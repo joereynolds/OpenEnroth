@@ -1230,3 +1230,73 @@ GAME_TEST(Coop, NoTurnBasedModeInCoop) {
     EXPECT_EQ(turnBasedTape, tape(false));
     EXPECT_CONTAINS(statusTape, "Turn-based mode isn't available in co-op");
 }
+
+GAME_TEST(Coop, HostSendsItsClock) {
+    // Guests get the host's game time.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+
+    std::optional<CoopClock> clock;
+    for (int i = 0; i < 100 && !clock; i++) {
+        game.tick();
+        guest.update();
+        clock = guest.takeClock();
+    }
+
+    ASSERT_TRUE(clock);
+    EXPECT_EQ(clock->playingTime, pParty->GetPlayingTime());
+}
+
+GAME_TEST(Coop, GuestFollowsHostClock) {
+    // A guest's clock follows the host's when the two drift apart, both ways, and is left alone for small differences
+    // that network delay explains.
+    for (int offsetSeconds : {7200, -7200, 10}) {
+        SCOPED_TRACE(fmt::format("offsetSeconds={}", offsetSeconds));
+        test.prepareForNextTest();
+        auto timeTape = tapes.time();
+        engine->config->debug.NoActors.setValue(true);
+        game.startNewGame();
+        game.restAndHeal(); // Gives the clock room to go back by hours.
+        Blob hostSave = createSaveData(false, "Host").second;
+        CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+        game.goToMainMenu();
+        coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+            server.update();
+            game.tick();
+        }
+        ASSERT_EQ(server.remoteParties().size(), 1);
+        test.startTaping();
+        game.tick(); // Tapes the clock before the host's arrives.
+
+        server.sendClock(CoopClock{pParty->GetPlayingTime() + Duration::fromSeconds(offsetSeconds)});
+        for (int i = 0; i < 10; i++) { // A fixed wait, the small difference must not change anything.
+            server.update();
+            game.tick();
+        }
+
+        std::vector<Time> times(timeTape.begin(), timeTape.end());
+        Duration biggestJump;
+        for (size_t i = 1; i < times.size(); i++) {
+            Duration jump = times[i] - times[i - 1];
+            if (std::abs(jump.ticks()) > std::abs(biggestJump.ticks()))
+                biggestJump = jump;
+        }
+        if (offsetSeconds == 7200) {
+            EXPECT_GE(biggestJump, Duration::fromHours(2) - Duration::fromMinutes(1));
+        } else if (offsetSeconds == -7200) {
+            EXPECT_LE(biggestJump, Duration() - Duration::fromHours(2) + Duration::fromMinutes(1));
+        } else {
+            EXPECT_LT(biggestJump, Duration::fromMinutes(1));
+        }
+    }
+}

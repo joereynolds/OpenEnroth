@@ -15,6 +15,7 @@
 #include "Engine/Objects/MonsterEnums.h"
 
 #include "Core/Time/Duration.h"
+#include "Core/Time/Time.h"
 
 #include "Library/Geometry/Vec.h"
 
@@ -172,10 +173,15 @@ struct CoopGroundItemTaken {
     Vec3f pos; // Ground items have different indices in different games, they are matched by kind and place.
 };
 
+/** Host to clients, the host's game time. Clients follow it, the host's clock is the world's. */
+struct CoopClock {
+    Time playingTime;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
-                                 CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken>;
+                                 CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock>;
 
 /**
  * @param message                       Message to encode.

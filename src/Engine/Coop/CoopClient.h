@@ -150,6 +150,11 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopGroundItemTaken> takeGroundItemsTaken();
 
     /**
+     * @return                          The newest game time the host sent since the last call, if any.
+     */
+    [[nodiscard]] std::optional<CoopClock> takeClock();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -219,4 +224,5 @@ class CoopClient {
     std::vector<CoopQuestRewards> _questRewards;
     std::vector<CoopChest> _chests;
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
+    std::optional<CoopClock> _clock;
 };

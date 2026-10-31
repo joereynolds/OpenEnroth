@@ -293,6 +293,14 @@ UNIT_TEST(CoopProtocol, GroundItemTakenRoundTrip) {
     EXPECT_EQ(decoded.pos, Vec3f(10, -20, 30.5f));
 }
 
+UNIT_TEST(CoopProtocol, ClockRoundTrip) {
+    // A clock keeps the time to the tick.
+    CoopClock clock;
+    clock.playingTime = Time::fromTicks(123456789);
+
+    EXPECT_EQ(roundTrip(clock).playingTime, Time::fromTicks(123456789));
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

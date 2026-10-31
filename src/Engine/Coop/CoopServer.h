@@ -130,6 +130,13 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopGroundItemTaken> takeGroundItemsTaken();
 
     /**
+     * Sends the host's game time to all clients.
+     *
+     * @param clock                     The host's game time.
+     */
+    void sendClock(const CoopClock &clock);
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.

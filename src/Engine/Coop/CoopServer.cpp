@@ -109,6 +109,10 @@ std::vector<CoopGroundItemTaken> CoopServer::takeGroundItemsTaken() {
     return std::exchange(_groundItemsTaken, {});
 }
 
+void CoopServer::sendClock(const CoopClock &clock) {
+    sendToJoined(NET_CHANNEL_UNRELIABLE, clock);
+}
+
 void CoopServer::sendLoot(int playerId, const CoopLoot &loot) {
     for (const auto &[peer, client] : _clients)
         if (client.playerId == playerId)
