@@ -12,6 +12,7 @@
 #include "Engine/Party.h"
 #include "Engine/SaveLoad.h"
 #include "Engine/Timer.h"
+#include "Engine/Graphics/Indoor.h"
 #include "Engine/Objects/Actor.h"
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
@@ -89,6 +90,7 @@ void CoopSession::update() {
 
     if (_server) {
         applyActorDamage();
+        updateStandIns();
         sendActorStates();
     } else {
         sendActorHits();
@@ -162,7 +164,7 @@ static CoopActorState actorState(int index, const Actor &actor) {
     result.yaw = actor.yawAngle;
     result.sectorId = actor.sectorId;
     result.hp = actor.hp;
-    result.aiState = actor.aiState;
+    result.aiState = (actor.attributes & ACTOR_COOP_STAND_IN) ? Removed : actor.aiState; // Clients draw the parties themselves.
     result.animation = actor.currentActionAnimation;
     result.actionTime = actor.currentActionTime;
     result.actionLength = actor.currentActionLength;
@@ -258,6 +260,45 @@ void CoopSession::applyActorDamage() {
         actor.hp -= damage.damage;
         if (actor.hp <= 0)
             Actor::Die(damage.index); // No experience, the guest's game gave it to the guest's party.
+    }
+}
+
+void CoopSession::updateStandIns() {
+    if (_standInsMap != engine->_currentLoadedMapId) {
+        _standIns.clear(); // Loading a map replaced the whole actor list.
+        _standInsMap = engine->_currentLoadedMapId;
+    }
+
+    const std::map<int, CoopPartyPose> &parties = _server->remoteParties();
+    std::erase_if(_standIns, [&](const auto &entry) {
+        auto pos = parties.find(entry.first);
+        if (pos != parties.end() && pos->second.map == engine->_currentLoadedMapId)
+            return false;
+        pActors[entry.second].aiState = Removed;
+        pActors[entry.second].attributes &= ~ACTOR_COOP_STAND_IN;
+        return true;
+    });
+
+    for (const auto &[playerId, pose] : parties) {
+        if (pose.map != engine->_currentLoadedMapId)
+            continue;
+
+        if (!_standIns.contains(playerId)) {
+            Actor *actor = AllocateActor();
+            if (!actor)
+                continue;
+            becomeMonster(actor, MONSTER_FIGHTER_CHAIN_C);
+            actor->attributes = ACTOR_COOP_STAND_IN;
+            _standIns[playerId] = actor->id;
+        }
+
+        Actor &actor = pActors[_standIns[playerId]];
+        actor.pos = pose.pos;
+        actor.yawAngle = pose.yaw;
+        actor.velocity = Vec3f();
+        actor.sectorId = uCurrentlyLoadedLevelType == LEVEL_INDOOR ? pIndoor->GetSector(pose.pos) : 0;
+        actor.aiState = Standing;
+        actor.hp = actor.monsterInfo.hp; // Stand-ins never die, what they're hit with is the guest's to take.
     }
 }
 

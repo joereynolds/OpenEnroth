@@ -110,6 +110,7 @@ class CoopSession {
     void sendActorStates();
     void applyActorStates();
     void applyActorDamage();
+    void updateStandIns();
     void sendActorHits();
 
  private:
@@ -126,6 +127,8 @@ class CoopSession {
     std::vector<CoopActorState> _lastSentActors;
     MapId _lastSentActorsMap = MAP_INVALID;
     std::chrono::steady_clock::time_point _lastFullActorUpdate;
+    std::map<int, int> _standIns; // Player id to the index of the actor that stands in for that player's party.
+    MapId _standInsMap = MAP_INVALID;
 };
 
 extern std::unique_ptr<CoopSession> coopSession;

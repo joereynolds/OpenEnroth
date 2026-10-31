@@ -571,3 +571,40 @@ GAME_TEST(Coop, GuestHitsAreSentToHost) {
     EXPECT_EQ(damage[0].index, 0);
     EXPECT_CONTAINS(statusTape, fmt::format("{} inflicts {} points killing Giant Rat", shooter.name, damage[0].damage));
 }
+
+GAME_TEST(Coop, MonstersGoAfterGuests) {
+    // Monsters go after a guest's party the way they go after the host's. A goblin next to a guest far from the host
+    // comes at the guest, the same goblin with nobody around stays put.
+    for (bool guestNearby : {false, true}) {
+        SCOPED_TRACE(fmt::format("guestNearby={}", guestNearby));
+        test.prepareForNextTest();
+        engine->config->debug.NoActors.setValue(true);
+        game.startNewGame();
+        prepareForBattleTest();
+        engine->config->debug.NoActors.setValue(false);
+        Vec3f guestPos(2386, 9696, 960); // In front of the fire guild's door, far from the host at the bridge.
+        game.spawnMonster(guestPos + Vec3f(0, -300, 0), MONSTER_GOBLIN_A);
+        auto stateTape = actorTapes.aiState(0);
+        coopSession = CoopSession::host(0, 4);
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+        for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+            game.tick();
+            guest.update();
+        }
+        ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+        test.startTaping();
+
+        CoopPartyPose pose;
+        pose.map = guestNearby ? MAP_EMERALD_ISLAND : MAP_HARMONDALE;
+        pose.pos = guestPos;
+        for (int i = 0; i < 50; i++) { // The goblin notices the party and walks up to it.
+            guest.sendLocalPose(pose);
+            guest.update();
+            game.tick();
+        }
+
+        bool cameAtGuest = stateTape.contains(Pursuing) || stateTape.contains(AttackingMelee);
+        EXPECT_EQ(cameAtGuest, guestNearby);
+    }
+}

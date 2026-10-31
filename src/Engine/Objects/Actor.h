@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <deque>
 #include <string>
 
@@ -76,6 +77,12 @@ class Actor {
      * @return                          Hostility level (aggro range) between the two.
      */
     MonsterHostility GetActorsRelation(Actor *otherActPtr);
+
+    /**
+     * @return                          How close a party has to be for this actor to go after it, or empty if this
+     *                                  actor leaves parties alone.
+     */
+    [[nodiscard]] std::optional<unsigned> partyDetectionRange();
     void SetRandomGoldIfTheresNoItem();
     bool CanAct() const;
     bool CanBeDamaged() const;

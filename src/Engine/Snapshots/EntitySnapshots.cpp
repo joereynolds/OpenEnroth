@@ -1319,7 +1319,7 @@ void snapshot(const Actor &src, Actor_MM7 *dst) {
     snapshot(src.GetDisplayName(), &dst->name);
 
     dst->npcId = src.npcId;
-    dst->attributes = std::to_underlying(src.attributes);
+    dst->attributes = std::to_underlying(src.attributes & ~ACTOR_COOP_STAND_IN);
     dst->hp = src.hp;
 
     dst->monsterInfo.level = src.monsterInfo.level;
@@ -1389,7 +1389,7 @@ void snapshot(const Actor &src, Actor_MM7 *dst) {
     snapshot(src.initialPosition, &dst->initialPosition);
     snapshot(src.guardingPosition, &dst->guardingPosition);
     dst->tetherDistance = src.tetherDistance;
-    dst->aiState = std::to_underlying(src.aiState);
+    dst->aiState = std::to_underlying((src.attributes & ACTOR_COOP_STAND_IN) ? Removed : src.aiState); // Stand-ins are recreated while in co-op.
     dst->currentActionAnimation = std::to_underlying(src.currentActionAnimation);
     dst->carriedItemId = std::to_underlying(src.carriedItemId);
     dst->currentActionTime = src.currentActionTime.ticks();

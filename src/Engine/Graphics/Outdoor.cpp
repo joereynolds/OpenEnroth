@@ -676,8 +676,8 @@ void OutdoorLocation::PrepareActorsDrawList() {
 
     for (int i = 0; i < pActors.size(); ++i) {
         pActors[i].attributes &= ~ACTOR_VISIBLE;
-        if (pActors[i].aiState == Removed || pActors[i].aiState == Disabled) {
-            continue;
+        if (pActors[i].aiState == Removed || pActors[i].aiState == Disabled || (pActors[i].attributes & ACTOR_COOP_STAND_IN)) {
+            continue; // Other co-op parties are drawn by PrepareRemotePartiesDrawList.
         }
 
         if (uNumBillboardsToDraw >= 500) return;
