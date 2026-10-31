@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -28,9 +29,10 @@ class CoopServer {
      * @param maxClients                Maximal number of simultaneously connected clients.
      * @param saveGameProvider          Called whenever a client is accepted, returns the current game serialized
      *                                  as a save file.
+     * @param hostName                  Name of the host's player, shown to the clients.
      * @throws Exception                If the port couldn't be bound.
      */
-    CoopServer(int port, int maxClients, std::function<Blob()> saveGameProvider);
+    CoopServer(int port, int maxClients, std::function<Blob()> saveGameProvider, std::string hostName = "Host");
     ~CoopServer();
 
     /**
@@ -57,6 +59,34 @@ class CoopServer {
         return _remoteParties;
     }
 
+    /**
+     * Proposes that the group travels, on behalf of the host. Everyone else is asked, and the outcome is reported by
+     * `takeTravelDecision`. With nobody else around the trip is approved right away.
+     *
+     * @param destination               Where to travel.
+     */
+    void requestTravel(const MapDestination &destination);
+
+    /**
+     * Answers the vote returned by `pendingVote` on behalf of the host. Does nothing if there's none.
+     *
+     * @param accepted                  Whether the host agrees to travel.
+     */
+    void answerTravel(bool accepted);
+
+    /**
+     * @return                          Vote that's waiting for the host's answer, if any.
+     */
+    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const {
+        return _hostVote;
+    }
+
+    /**
+     * @return                          Outcome of the last vote or of a turned down request, if there's one the host
+     *                                  hasn't taken yet.
+     */
+    [[nodiscard]] std::optional<CoopTravelDecision> takeTravelDecision();
+
  private:
     struct Client {
         int playerId = -1; // -1 until the client's hello is accepted.
@@ -67,6 +97,10 @@ class CoopServer {
     void handleHello(NetPeerId peer, const CoopHello &hello);
     void handlePartyPose(NetPeerId peer, CoopPartyPose pose);
     void handleDisconnect(NetPeerId peer);
+    void startVote(int proposerId, NetPeerId proposerPeer, const MapDestination &destination);
+    void recordAnswer(int playerId, bool accepted);
+    void finishVote(bool approved, std::string declinedBy);
+    [[nodiscard]] std::string playerName(int playerId) const;
     void reject(NetPeerId peer, std::string reason);
     void send(NetPeerId peer, NetChannel channel, CoopMessage message);
     void sendToJoined(NetChannel channel, CoopMessage message, NetPeerId except = -1);
@@ -78,4 +112,15 @@ class CoopServer {
     int _nextPlayerId = HOST_PLAYER_ID + 1;
     std::optional<CoopPartyPose> _localPose;
     std::map<int, CoopPartyPose> _remoteParties;
+    std::string _hostName;
+
+    struct Vote {
+        int id = -1;
+        MapDestination destination;
+        std::set<int> waitingFor; // Player ids that haven't answered yet.
+    };
+    std::optional<Vote> _vote;
+    int _nextVoteId = 1;
+    std::optional<CoopTravelVote> _hostVote;
+    std::optional<CoopTravelDecision> _hostDecision;
 };

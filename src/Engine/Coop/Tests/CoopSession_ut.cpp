@@ -195,3 +195,111 @@ UNIT_TEST(CoopSession, MalformedMessageGetsClientDisconnected) {
     }
     EXPECT_TRUE(disconnected);
 }
+
+UNIT_TEST(CoopSession, LoneHostTravelsRightAway) {
+    // A host with nobody connected gets its trip approved without a vote.
+    CoopServer server(0, 4, testSaveGame);
+    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+
+    std::optional<CoopTravelDecision> decision = server.takeTravelDecision();
+    ASSERT_TRUE(decision);
+    EXPECT_TRUE(decision->approved);
+    EXPECT_EQ(decision->destination.map(), MAP_HARMONDALE);
+    EXPECT_FALSE(server.pendingVote());
+}
+
+UNIT_TEST(CoopSession, TravelNeedsEveryonesAgreement) {
+    // A client's trip is put to the host and the other client, and goes ahead once both agree.
+    CoopServer server(0, 4, testSaveGame, "Hosty");
+    std::unique_ptr<CoopClient> proposer = joinedClient(&server, "Proposer");
+    std::unique_ptr<CoopClient> voter = joinedClient(&server, "Voter");
+
+    proposer->requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    ASSERT_TRUE(pumpUntil(&server, {proposer.get(), voter.get()}, [&] { return server.pendingVote() && voter->pendingVote(); }));
+    EXPECT_EQ(server.pendingVote()->proposerName, "Proposer");
+    EXPECT_EQ(voter->pendingVote()->destination.map(), MAP_HARMONDALE);
+    EXPECT_FALSE(proposer->pendingVote());
+
+    server.answerTravel(true);
+    EXPECT_FALSE(server.takeTravelDecision()); // Still waiting for the other client.
+    voter->answerTravel(true);
+
+    std::optional<CoopTravelDecision> proposerDecision;
+    std::optional<CoopTravelDecision> voterDecision;
+    ASSERT_TRUE(pumpUntil(&server, {proposer.get(), voter.get()}, [&] {
+        if (!proposerDecision)
+            proposerDecision = proposer->takeTravelDecision();
+        if (!voterDecision)
+            voterDecision = voter->takeTravelDecision();
+        return proposerDecision && voterDecision;
+    }));
+    std::optional<CoopTravelDecision> hostDecision = server.takeTravelDecision();
+    for (const std::optional<CoopTravelDecision> &decision : {hostDecision, proposerDecision, voterDecision}) {
+        ASSERT_TRUE(decision);
+        EXPECT_TRUE(decision->approved);
+        EXPECT_EQ(decision->destination.map(), MAP_HARMONDALE);
+    }
+}
+
+UNIT_TEST(CoopSession, AnyoneCanDeclineTravel) {
+    // A single no cancels the trip for everyone and says who refused.
+    CoopServer server(0, 4, testSaveGame, "Hosty");
+    std::unique_ptr<CoopClient> voter = joinedClient(&server, "Voter");
+
+    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    EXPECT_FALSE(server.pendingVote()); // The proposer isn't asked.
+    ASSERT_TRUE(pumpUntil(&server, {voter.get()}, [&] { return voter->pendingVote().has_value(); }));
+    EXPECT_EQ(voter->pendingVote()->proposerName, "Hosty");
+    voter->answerTravel(false);
+
+    std::optional<CoopTravelDecision> hostDecision;
+    std::optional<CoopTravelDecision> voterDecision;
+    ASSERT_TRUE(pumpUntil(&server, {voter.get()}, [&] {
+        if (!hostDecision)
+            hostDecision = server.takeTravelDecision();
+        if (!voterDecision)
+            voterDecision = voter->takeTravelDecision();
+        return hostDecision && voterDecision;
+    }));
+    for (const std::optional<CoopTravelDecision> &decision : {hostDecision, voterDecision}) {
+        EXPECT_FALSE(decision->approved);
+        EXPECT_EQ(decision->declinedBy, "Voter");
+    }
+}
+
+UNIT_TEST(CoopSession, SecondTripIsTurnedDownDuringVote) {
+    // A trip proposed while another one is being voted on is turned down without a vote, and the first vote goes on.
+    CoopServer server(0, 4, testSaveGame);
+    std::unique_ptr<CoopClient> client = joinedClient(&server, "Client");
+
+    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    client->requestTravel(MapDestination(MAP_ERATHIA, MAP_START_POINT_PARTY));
+    std::optional<CoopTravelDecision> clientDecision;
+    ASSERT_TRUE(pumpUntil(&server, {client.get()}, [&] {
+        if (!clientDecision)
+            clientDecision = client->takeTravelDecision();
+        return clientDecision && client->pendingVote();
+    }));
+    EXPECT_FALSE(clientDecision->approved);
+    EXPECT_EQ(clientDecision->voteId, -1);
+    EXPECT_EQ(clientDecision->destination.map(), MAP_ERATHIA);
+    EXPECT_EQ(client->pendingVote()->destination.map(), MAP_HARMONDALE);
+    EXPECT_FALSE(server.takeTravelDecision());
+}
+
+UNIT_TEST(CoopSession, LeavingVoterDoesNotBlockTravel) {
+    // A voter who disconnects mid-vote stops counting, so the others can still go.
+    CoopServer server(0, 4, testSaveGame);
+    std::unique_ptr<CoopClient> client = joinedClient(&server, "Client");
+
+    server.requestTravel(MapDestination(MAP_HARMONDALE, MAP_START_POINT_PARTY));
+    ASSERT_TRUE(pumpUntil(&server, {client.get()}, [&] { return client->pendingVote().has_value(); }));
+    client.reset();
+
+    std::optional<CoopTravelDecision> decision;
+    ASSERT_TRUE(pumpUntil(&server, {}, [&] {
+        decision = server.takeTravelDecision();
+        return decision.has_value();
+    }));
+    EXPECT_TRUE(decision->approved);
+}

@@ -55,6 +55,28 @@ void CoopClient::sendLocalPose(const CoopPartyPose &pose) {
     _net->send(_host, NET_CHANNEL_UNRELIABLE, encodeCoopMessage(message));
 }
 
+void CoopClient::requestTravel(const MapDestination &destination) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(CoopTravelRequest{destination}));
+}
+
+void CoopClient::answerTravel(bool accepted) {
+    if (!_pendingVote)
+        return;
+
+    CoopTravelAnswer answer;
+    answer.voteId = _pendingVote->voteId;
+    answer.accepted = accepted;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(answer));
+    _pendingVote.reset();
+}
+
+std::optional<CoopTravelDecision> CoopClient::takeTravelDecision() {
+    return std::exchange(_travelDecision, std::nullopt);
+}
+
 void CoopClient::handleMessage(CoopMessage message) {
     if (CoopWelcome *welcome = std::get_if<CoopWelcome>(&message)) {
         if (_state != COOP_CLIENT_CONNECTING) {
@@ -71,6 +93,12 @@ void CoopClient::handleMessage(CoopMessage message) {
         _remoteParties[pose->playerId] = *pose;
     } else if (const CoopPlayerLeft *left = std::get_if<CoopPlayerLeft>(&message)) {
         _remoteParties.erase(left->playerId);
+    } else if (CoopTravelVote *vote = std::get_if<CoopTravelVote>(&message)) {
+        _pendingVote = std::move(*vote);
+    } else if (CoopTravelDecision *decision = std::get_if<CoopTravelDecision>(&message)) {
+        if (_pendingVote && _pendingVote->voteId == decision->voteId)
+            _pendingVote.reset(); // Someone else said no before this player answered.
+        _travelDecision = std::move(*decision);
     } else {
         fail("Host sent a client-only message");
     }

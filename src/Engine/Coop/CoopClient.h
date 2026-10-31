@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -73,6 +74,34 @@ class CoopClient {
         return _remoteParties;
     }
 
+    /**
+     * Asks the host to put a trip to a vote. Does nothing until joined. The outcome is reported by
+     * `takeTravelDecision`.
+     *
+     * @param destination               Where to travel.
+     */
+    void requestTravel(const MapDestination &destination);
+
+    /**
+     * Answers the vote returned by `pendingVote`. Does nothing if there's none.
+     *
+     * @param accepted                  Whether this player agrees to travel.
+     */
+    void answerTravel(bool accepted);
+
+    /**
+     * @return                          Vote that's waiting for this player's answer, if any.
+     */
+    [[nodiscard]] const std::optional<CoopTravelVote> &pendingVote() const {
+        return _pendingVote;
+    }
+
+    /**
+     * @return                          Outcome of the last vote or of a turned down request, if there's one that
+     *                                  hasn't been taken yet.
+     */
+    [[nodiscard]] std::optional<CoopTravelDecision> takeTravelDecision();
+
  private:
     void handleMessage(CoopMessage message);
     void fail(std::string reason);
@@ -86,4 +115,6 @@ class CoopClient {
     int _playerId = -1;
     Blob _saveGame;
     std::map<int, CoopPartyPose> _remoteParties;
+    std::optional<CoopTravelVote> _pendingVote;
+    std::optional<CoopTravelDecision> _travelDecision;
 };
