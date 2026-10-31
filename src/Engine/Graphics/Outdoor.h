@@ -35,6 +35,7 @@ struct OutdoorLocation {
     // int New_SKY_NIGHT_ID;
     void ExecDraw(unsigned int bRedraw);
     void PrepareActorsDrawList();
+    void PrepareRemotePartiesDrawList();
     void CreateDebugLocation();
     void Release();
     void Load(std::string_view filename, int days_played, int respawn_interval_days, bool *outdoors_was_respawned);

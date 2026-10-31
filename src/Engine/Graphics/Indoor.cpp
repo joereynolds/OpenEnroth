@@ -153,6 +153,7 @@ void PrepareDrawLists_BLV() {
 
     render->DrawSpriteObjects();
     pOutdoor->PrepareActorsDrawList();
+    pOutdoor->PrepareRemotePartiesDrawList();
 
      for (unsigned i = 0; i < pBspRenderer->uNumVisibleNotEmptySectors; ++i) {
          int sectorId = pBspRenderer->pVisibleSectorIDs_toDrawDecorsActorsEtcFrom[i];

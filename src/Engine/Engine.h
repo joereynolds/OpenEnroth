@@ -11,6 +11,7 @@
 #include "Engine/Evt/EvtProgram.h"
 #include "Engine/MapEnums.h"
 #include "Engine/PartyPlacement.h"
+#include "Engine/RemoteParty.h"
 #include "Engine/mm7_data.h"
 
 #include "Core/Time/Time.h"
@@ -152,6 +153,7 @@ class Engine {
     std::optional<MapDestination> _pendingTransition; // Set while a map change is in flight, consumed by the loaders.
     std::string _lastLoadedSaveFileName; // File name of the last loaded savegame, pre-selected in the save & load menus.
     std::string _pendingLoadFileName; // Savegame to load when the main menu FSM exits into the game loop.
+    std::vector<RemoteParty> _remoteParties; // Other co-op players' parties on the current map.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;
