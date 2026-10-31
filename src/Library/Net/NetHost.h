@@ -10,6 +10,8 @@
 
 struct _ENetHost;
 
+constexpr int NET_DEFAULT_TIMEOUT_MS = 10000;
+
 /**
  * One end of a network connection, either a server that accepts peers or a client with a single peer.
  *
@@ -23,10 +25,12 @@ class NetHost {
     /**
      * @param port                      Port to listen on, zero picks a free one.
      * @param maxPeers                  Maximal number of simultaneously connected peers.
+     * @param timeoutMs                 How long a peer may go without acknowledging reliable packets before it's
+     *                                  considered disconnected.
      * @return                          Server host.
      * @throws Exception                If the port couldn't be bound.
      */
-    [[nodiscard]] static std::unique_ptr<NetHost> listen(int port, int maxPeers);
+    [[nodiscard]] static std::unique_ptr<NetHost> listen(int port, int maxPeers, int timeoutMs = NET_DEFAULT_TIMEOUT_MS);
 
     /**
      * Starts connecting to a server. The connection is established asynchronously, a `NET_EVENT_CONNECTED` or a
@@ -34,10 +38,12 @@ class NetHost {
      *
      * @param address                   Host name or IP address of the server.
      * @param port                      Server port.
+     * @param timeoutMs                 How long to wait for the server to answer, both when connecting and once
+     *                                  connected, before considering the connection lost.
      * @return                          Client host.
      * @throws Exception                If the address couldn't be resolved.
      */
-    [[nodiscard]] static std::unique_ptr<NetHost> connect(std::string_view address, int port);
+    [[nodiscard]] static std::unique_ptr<NetHost> connect(std::string_view address, int port, int timeoutMs = NET_DEFAULT_TIMEOUT_MS);
 
     /**
      * @return                          Port this server is listening on, zero for a client.
@@ -83,8 +89,9 @@ class NetHost {
     void flush();
 
  private:
-    explicit NetHost(_ENetHost *host);
+    NetHost(_ENetHost *host, int timeoutMs);
 
  private:
     _ENetHost *_host = nullptr;
+    int _timeoutMs = 0;
 };

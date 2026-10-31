@@ -40,7 +40,13 @@ static ENetPacket *createPacket(NetChannel channel, const Blob &data) {
     return packet;
 }
 
-NetHost::NetHost(_ENetHost *host) : _host(host) {}
+static void setPeerTimeout(ENetPeer *peer, int timeoutMs) {
+    // The limit counts retransmits, the minimum and maximum are times. Equal times make the drop happen right
+    // when the time is up, whatever the retransmit count.
+    enet_peer_timeout(peer, 0, timeoutMs, timeoutMs);
+}
+
+NetHost::NetHost(_ENetHost *host, int timeoutMs) : _host(host), _timeoutMs(timeoutMs) {}
 
 NetHost::~NetHost() {
     for (size_t i = 0; i < _host->peerCount; i++)
@@ -48,7 +54,8 @@ NetHost::~NetHost() {
     enet_host_destroy(_host);
 }
 
-std::unique_ptr<NetHost> NetHost::listen(int port, int maxPeers) {
+std::unique_ptr<NetHost> NetHost::listen(int port, int maxPeers, int timeoutMs) {
+    assert(timeoutMs > 0);
     assert(port >= 0 && port <= 65535);
     assert(maxPeers > 0 && maxPeers <= ENET_PROTOCOL_MAXIMUM_PEER_ID);
 
@@ -61,10 +68,11 @@ std::unique_ptr<NetHost> NetHost::listen(int port, int maxPeers) {
     ENetHost *host = enet_host_create(&address, maxPeers, CHANNEL_COUNT, 0, 0);
     if (!host)
         throw Exception("Could not listen on port {}", port);
-    return std::unique_ptr<NetHost>(new NetHost(host));
+    return std::unique_ptr<NetHost>(new NetHost(host, timeoutMs));
 }
 
-std::unique_ptr<NetHost> NetHost::connect(std::string_view address, int port) {
+std::unique_ptr<NetHost> NetHost::connect(std::string_view address, int port, int timeoutMs) {
+    assert(timeoutMs > 0);
     assert(port > 0 && port <= 65535);
 
     ensureEnetInitialized();
@@ -78,9 +86,11 @@ std::unique_ptr<NetHost> NetHost::connect(std::string_view address, int port) {
     if (!host)
         throw Exception("Could not create a network socket");
 
-    std::unique_ptr<NetHost> result(new NetHost(host));
-    if (!enet_host_connect(host, &serverAddress, CHANNEL_COUNT, 0))
+    std::unique_ptr<NetHost> result(new NetHost(host, timeoutMs));
+    ENetPeer *peer = enet_host_connect(host, &serverAddress, CHANNEL_COUNT, 0);
+    if (!peer)
         throw Exception("Could not start connecting to '{}:{}'", address, port);
+    setPeerTimeout(peer, timeoutMs);
     return result;
 }
 
@@ -103,6 +113,7 @@ std::optional<NetEvent> NetHost::poll(int timeoutMs) {
     switch (event.type) {
     case ENET_EVENT_TYPE_CONNECT:
         result.type = NET_EVENT_CONNECTED;
+        setPeerTimeout(event.peer, _timeoutMs);
         break;
     case ENET_EVENT_TYPE_DISCONNECT:
         result.type = NET_EVENT_DISCONNECTED;

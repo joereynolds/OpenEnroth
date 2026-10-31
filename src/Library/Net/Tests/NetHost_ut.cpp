@@ -67,6 +67,17 @@ UNIT_TEST(NetHost, ListenOnBusyPortThrows) {
     EXPECT_THROW((void) NetHost::listen(server->port(), 4), Exception);
 }
 
+UNIT_TEST(NetHost, ConnectToNobodyTimesOut) {
+    // Connecting to a port nobody listens on fails once the timeout is up.
+    std::unique_ptr<NetHost> client = NetHost::connect("127.0.0.1", NetHost::listen(0, 1)->port(), 300);
+
+    auto start = std::chrono::steady_clock::now();
+    std::optional<NetEvent> event = waitForEvent(client.get(), nullptr);
+    ASSERT_TRUE(event);
+    EXPECT_EQ(event->type, NET_EVENT_DISCONNECTED);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(2));
+}
+
 UNIT_TEST(NetHost, ConnectAndExchangeMessages) {
     // A client connects, and messages travel both ways on both channels.
     std::unique_ptr<NetHost> server = NetHost::listen(0, 4);
