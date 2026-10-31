@@ -139,6 +139,41 @@ UNIT_TEST(CoopProtocol, TravelToStartPointWithoutMapThrows) {
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(wire)), Exception);
 }
 
+UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
+    // Actor states keep the map, the actor count and every field of every actor.
+    CoopActorStates states;
+    states.map = MAP_TULAREAN_FOREST;
+    states.actorCount = 42;
+    CoopActorState actor;
+    actor.index = 17;
+    actor.monster = MONSTER_GOBLIN_B;
+    actor.pos = Vec3f(100.5f, -200, 300);
+    actor.yaw = 1500;
+    actor.sectorId = 3;
+    actor.hp = -5;
+    actor.aiState = Pursuing;
+    actor.animation = ANIM_Walking;
+    actor.actionTime = Duration::fromTicks(12);
+    actor.actionLength = Duration::fromTicks(128);
+    states.actors = {actor, CoopActorState()};
+
+    CoopActorStates decoded = roundTrip(states);
+    EXPECT_EQ(decoded.map, MAP_TULAREAN_FOREST);
+    EXPECT_EQ(decoded.actorCount, 42);
+    ASSERT_EQ(decoded.actors.size(), 2);
+    const CoopActorState &first = decoded.actors[0];
+    EXPECT_EQ(first.index, 17);
+    EXPECT_EQ(first.monster, MONSTER_GOBLIN_B);
+    EXPECT_EQ(first.pos, Vec3f(100.5f, -200, 300));
+    EXPECT_EQ(first.yaw, 1500);
+    EXPECT_EQ(first.sectorId, 3);
+    EXPECT_EQ(first.hp, -5);
+    EXPECT_EQ(first.aiState, Pursuing);
+    EXPECT_EQ(first.animation, ANIM_Walking);
+    EXPECT_EQ(first.actionTime, Duration::fromTicks(12));
+    EXPECT_EQ(first.actionLength, Duration::fromTicks(128));
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

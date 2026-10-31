@@ -3,6 +3,7 @@
 #include <exception>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "Library/Logger/Logger.h"
 
@@ -43,6 +44,10 @@ void CoopClient::update() {
     }
 }
 
+void CoopClient::flush() {
+    _net->flush();
+}
+
 Blob CoopClient::takeSaveGame() {
     return std::move(_saveGame);
 }
@@ -78,6 +83,10 @@ std::optional<CoopTravelDecision> CoopClient::takeTravelDecision() {
     return std::exchange(_travelDecision, std::nullopt);
 }
 
+std::vector<CoopActorStates> CoopClient::takeActorStates() {
+    return std::exchange(_actorStates, {});
+}
+
 void CoopClient::handleMessage(CoopMessage message) {
     if (CoopWelcome *welcome = std::get_if<CoopWelcome>(&message)) {
         if (_state != COOP_CLIENT_CONNECTING) {
@@ -97,6 +106,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _remoteParties.erase(left->playerId);
     } else if (CoopTravelVote *vote = std::get_if<CoopTravelVote>(&message)) {
         _pendingVote = std::move(*vote);
+    } else if (CoopActorStates *states = std::get_if<CoopActorStates>(&message)) {
+        _actorStates.push_back(std::move(*states));
     } else if (CoopTravelDecision *decision = std::get_if<CoopTravelDecision>(&message)) {
         if (_pendingVote && _pendingVote->voteId == decision->voteId)
             _pendingVote.reset(); // Someone else said no before this player answered.

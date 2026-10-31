@@ -186,6 +186,58 @@ static void deserializeBody(InputStream &src, CoopTravelDecision *dst) {
     dst->destination = deserializeDestination(src);
 }
 
+static void serializeDuration(Duration value, OutputStream *dst) {
+    serialize(static_cast<int64_t>(value.ticks()), dst);
+}
+
+static Duration deserializeDuration(InputStream &src) {
+    return Duration::fromTicks(fromStream<int64_t>(src));
+}
+
+static void serializeBody(const CoopActorStates &src, OutputStream *dst) {
+    serialize(std::to_underlying(src.map), dst);
+    serializeInt(src.actorCount, dst);
+    assert(src.actors.size() <= UINT32_MAX);
+    serialize(static_cast<uint32_t>(src.actors.size()), dst);
+    for (const CoopActorState &actor : src.actors) {
+        serializeInt(actor.index, dst);
+        serialize(std::to_underlying(actor.monster), dst);
+        serialize(actor.pos.x, dst);
+        serialize(actor.pos.y, dst);
+        serialize(actor.pos.z, dst);
+        serializeInt(actor.yaw, dst);
+        serializeInt(actor.sectorId, dst);
+        serializeInt(actor.hp, dst);
+        serialize(std::to_underlying(actor.aiState), dst);
+        serialize(std::to_underlying(actor.animation), dst);
+        serializeDuration(actor.actionTime, dst);
+        serializeDuration(actor.actionLength, dst);
+    }
+}
+
+static void deserializeBody(InputStream &src, CoopActorStates *dst) {
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->actorCount = deserializeInt(src);
+    uint32_t count = fromStream<uint32_t>(src);
+    if (count > src.size() - src.position())
+        throw Exception("Coop actor states claim {} actors, but only {} bytes are left", count, src.size() - src.position());
+    dst->actors.resize(count);
+    for (CoopActorState &actor : dst->actors) {
+        actor.index = deserializeInt(src);
+        actor.monster = static_cast<MonsterId>(fromStream<std::underlying_type_t<MonsterId>>(src));
+        deserialize(src, &actor.pos.x);
+        deserialize(src, &actor.pos.y);
+        deserialize(src, &actor.pos.z);
+        actor.yaw = deserializeInt(src);
+        actor.sectorId = deserializeInt(src);
+        actor.hp = deserializeInt(src);
+        actor.aiState = static_cast<AIState>(fromStream<std::underlying_type_t<AIState>>(src));
+        actor.animation = static_cast<ActorAnimation>(fromStream<std::underlying_type_t<ActorAnimation>>(src));
+        actor.actionTime = deserializeDuration(src);
+        actor.actionLength = deserializeDuration(src);
+    }
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

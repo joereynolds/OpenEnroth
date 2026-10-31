@@ -900,7 +900,8 @@ void ODM_UpdateUserInputAndOther() {
         }
     }
 
-    UpdateActors_ODM();
+    if (!engine->_actorsFollowHost)
+        UpdateActors_ODM();
 }
 //----- (0041F54A) --------------------------------------------------------
 void OutdoorLocation::LoadActualSkyFrame() {

@@ -6,11 +6,15 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "Engine/Engine.h"
 #include "Engine/Party.h"
 #include "Engine/SaveLoad.h"
 #include "Engine/Timer.h"
+#include "Engine/Objects/Actor.h"
+#include "Engine/Objects/MonsterEnumFunctions.h"
+#include "Engine/Objects/Monsters.h"
 #include "Engine/Tables/MapTable.h"
 
 #include "GUI/GUIWindow.h"
@@ -23,6 +27,7 @@
 #include "CoopServer.h"
 
 static constexpr std::chrono::seconds POSE_HEARTBEAT{1}; // Makes up for an unreliable pose that got lost while the party stands still.
+static constexpr std::chrono::seconds FULL_ACTOR_UPDATE_INTERVAL{1}; // Makes up for lost unreliable monster updates.
 
 std::unique_ptr<CoopSession> coopSession;
 
@@ -30,6 +35,7 @@ CoopSession::CoopSession() = default;
 
 CoopSession::~CoopSession() {
     engine->_remoteParties.clear();
+    engine->_actorsFollowHost = false;
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -80,6 +86,12 @@ void CoopSession::update() {
         _lastSendTime = now;
     }
 
+    if (_server) {
+        sendActorStates();
+    } else {
+        applyActorStates();
+    }
+
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
     if (decision)
         handleTravelDecision(*decision);
@@ -88,6 +100,12 @@ void CoopSession::update() {
     for (const auto &[playerId, remote] : remoteParties())
         if (remote.map == engine->_currentLoadedMapId)
             engine->_remoteParties.push_back(RemoteParty{remote.pos, remote.yaw, remote.walking});
+
+    if (_server) {
+        _server->flush();
+    } else {
+        _client->flush();
+    }
 }
 
 bool CoopSession::interceptMapChange() {
@@ -130,6 +148,99 @@ void CoopSession::handleTravelDecision(const CoopTravelDecision &decision) {
         engine->_statusBar->setEvent(fmt::format("Can't travel to {} while another trip is being voted on", mapName));
     } else {
         engine->_statusBar->setEvent(fmt::format("{} doesn't want to travel to {}", decision.declinedBy, mapName));
+    }
+}
+
+static CoopActorState actorState(int index, const Actor &actor) {
+    CoopActorState result;
+    result.index = index;
+    result.monster = actor.monsterInfo.id;
+    result.pos = actor.pos;
+    result.yaw = actor.yawAngle;
+    result.sectorId = actor.sectorId;
+    result.hp = actor.hp;
+    result.aiState = actor.aiState;
+    result.animation = actor.currentActionAnimation;
+    result.actionTime = actor.currentActionTime;
+    result.actionLength = actor.currentActionLength;
+    return result;
+}
+
+static void becomeMonster(Actor *actor, MonsterId monster) {
+    const MonsterDesc &desc = pMonsterList->monsters[monster];
+    actor->monsterInfo = pMonsterStats->infos[monster];
+    actor->monsterId = monster;
+    actor->radius = desc.monsterRadius;
+    actor->height = desc.monsterHeight;
+    actor->moveSpeed = desc.movementSpeed;
+    actor->PrepareSprites(0);
+}
+
+static bool sameActionAndPlace(const CoopActorState &l, const CoopActorState &r) {
+    // Action time ticks every frame, clients advance it on their own.
+    return l.monster == r.monster && l.pos == r.pos && l.yaw == r.yaw && l.sectorId == r.sectorId && l.hp == r.hp && l.aiState == r.aiState &&
+           l.animation == r.animation && l.actionLength == r.actionLength;
+}
+
+void CoopSession::sendActorStates() {
+    auto now = std::chrono::steady_clock::now();
+    bool full = now - _lastFullActorUpdate >= FULL_ACTOR_UPDATE_INTERVAL || _lastSentActorsMap != engine->_currentLoadedMapId ||
+                _lastSentActors.size() != pActors.size();
+
+    CoopActorStates states;
+    states.map = engine->_currentLoadedMapId;
+    states.actorCount = pActors.size();
+    std::vector<CoopActorState> current;
+    current.reserve(pActors.size());
+    for (int i = 0; i < std::ssize(pActors); i++) {
+        current.push_back(actorState(i, pActors[i]));
+        if (full || !sameActionAndPlace(current.back(), _lastSentActors[i]))
+            states.actors.push_back(current.back());
+    }
+
+    if (full)
+        _lastFullActorUpdate = now;
+    _lastSentActors = std::move(current);
+    _lastSentActorsMap = engine->_currentLoadedMapId;
+    if (!states.actors.empty())
+        _server->sendActorStates(states);
+}
+
+void CoopSession::applyActorStates() {
+    engine->_actorsFollowHost = _client->state() == COOP_CLIENT_JOINED;
+    if (!engine->_actorsFollowHost)
+        return;
+
+    if (!gameTimer->isPaused())
+        for (Actor &actor : pActors)
+            actor.currentActionTime += gameTimer->dt();
+
+    for (const CoopActorStates &states : _client->takeActorStates()) {
+        if (states.map != engine->_currentLoadedMapId)
+            continue;
+
+        while (std::ssize(pActors) < states.actorCount) {
+            Actor &actor = pActors.emplace_back(Actor(pActors.size()));
+            actor.aiState = Removed; // Until the host's state for it arrives.
+        }
+        for (int i = states.actorCount; i < std::ssize(pActors); i++)
+            pActors[i].aiState = Removed; // Spawned by a local encounter the host didn't roll.
+
+        for (const CoopActorState &state : states.actors) {
+            if (state.index < 0 || state.index >= states.actorCount || !allMonsters().contains(state.monster))
+                continue;
+            Actor &actor = pActors[state.index];
+            if (actor.monsterInfo.id != state.monster)
+                becomeMonster(&actor, state.monster);
+            actor.pos = state.pos;
+            actor.yawAngle = state.yaw;
+            actor.sectorId = state.sectorId;
+            actor.hp = state.hp;
+            actor.aiState = state.aiState;
+            actor.currentActionAnimation = state.animation;
+            actor.currentActionTime = state.actionTime;
+            actor.currentActionLength = state.actionLength;
+        }
     }
 }
 

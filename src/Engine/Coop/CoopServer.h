@@ -47,6 +47,11 @@ class CoopServer {
     void update();
 
     /**
+     * Sends everything queued so far right away instead of on the next `update`.
+     */
+    void flush();
+
+    /**
      * Sends the host party's pose to all clients.
      *
      * @param pose                      Pose of the host party, its player id is ignored.
@@ -59,6 +64,13 @@ class CoopServer {
     [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const {
         return _remoteParties;
     }
+
+    /**
+     * Sends the state of the monsters on the host's map to all clients.
+     *
+     * @param states                    Monster states to send.
+     */
+    void sendActorStates(const CoopActorStates &states);
 
     /**
      * Proposes that the group travels, on behalf of the host. Everyone else is asked, and the outcome is reported by

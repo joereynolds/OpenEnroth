@@ -1304,7 +1304,8 @@ bool Check_LOS_Obscurred_Outdoors_Bmodels(const Vec3f &target, const Vec3f &from
 //----- (0046BDF1) --------------------------------------------------------
 void BLV_UpdateUserInputAndOther() {
     BLV_ProcessPartyActions();
-    BLV_UpdateActors();
+    if (!engine->_actorsFollowHost)
+        BLV_UpdateActors();
     BLV_UpdateDoors();
 }
 

@@ -1614,7 +1614,8 @@ void Game::gameLoop() {
                 if (engineFlags & ENGINE_SKIP_NEXT_WORLD_UPDATE) {
                     engineFlags &= ~ENGINE_SKIP_NEXT_WORLD_UPDATE;
                 } else {
-                    Actor::UpdateActorAI();
+                    if (!engine->_actorsFollowHost)
+                        Actor::UpdateActorAI();
                     UpdateUserInput_and_MapSpecificStuff();
                 }
             }

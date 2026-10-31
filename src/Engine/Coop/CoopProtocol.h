@@ -2,9 +2,14 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "Engine/MapEnums.h"
 #include "Engine/PartyPlacement.h"
+#include "Engine/Objects/ActorEnums.h"
+#include "Engine/Objects/MonsterEnums.h"
+
+#include "Core/Time/Duration.h"
 
 #include "Library/Geometry/Vec.h"
 
@@ -78,8 +83,30 @@ struct CoopTravelDecision {
     MapDestination destination;
 };
 
+/** What a client needs to show one monster the way the host's game has it. */
+struct CoopActorState {
+    int index = -1; // Index in the map's actor list.
+    MonsterId monster = MONSTER_INVALID;
+    Vec3f pos;
+    int yaw = 0;
+    int sectorId = 0;
+    int hp = 0;
+    AIState aiState = Standing;
+    ActorAnimation animation = ANIM_Standing;
+    Duration actionTime;
+    Duration actionLength;
+};
+
+/** Host to clients, the state of the monsters on the host's map. */
+struct CoopActorStates {
+    MapId map = MAP_INVALID;
+    int actorCount = 0; // Size of the host's actor list. Encounters spawn at random, so a client's list can differ.
+    std::vector<CoopActorState> actors; // Only the monsters that changed, unless this is a periodic full update.
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
-                                 CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision>;
+                                 CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
+                                 CoopActorStates>;
 
 /**
  * @param message                       Message to encode.

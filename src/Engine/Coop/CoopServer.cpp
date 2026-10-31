@@ -44,10 +44,18 @@ void CoopServer::update() {
     }
 }
 
+void CoopServer::flush() {
+    _net->flush();
+}
+
 void CoopServer::sendLocalPose(const CoopPartyPose &pose) {
     _localPose = pose;
     _localPose->playerId = HOST_PLAYER_ID;
     sendToJoined(NET_CHANNEL_UNRELIABLE, *_localPose);
+}
+
+void CoopServer::sendActorStates(const CoopActorStates &states) {
+    sendToJoined(NET_CHANNEL_UNRELIABLE, states);
 }
 
 void CoopServer::requestTravel(const MapDestination &destination) {

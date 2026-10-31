@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "Library/Net/NetHost.h"
 
@@ -34,6 +35,11 @@ class CoopClient {
      * Processes all pending network events. Should be called once per frame.
      */
     void update();
+
+    /**
+     * Sends everything queued so far right away instead of on the next `update`.
+     */
+    void flush();
 
     [[nodiscard]] CoopClientState state() const {
         return _state;
@@ -83,6 +89,11 @@ class CoopClient {
     }
 
     /**
+     * @return                          Monster states received from the host since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopActorStates> takeActorStates();
+
+    /**
      * Asks the host to put a trip to a vote. Does nothing until joined. The outcome is reported by
      * `takeTravelDecision`.
      *
@@ -126,4 +137,5 @@ class CoopClient {
     std::map<int, CoopPartyPose> _remoteParties;
     std::optional<CoopTravelVote> _pendingVote;
     std::optional<CoopTravelDecision> _travelDecision;
+    std::vector<CoopActorStates> _actorStates;
 };

@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "Library/Geometry/Vec.h"
 
@@ -106,6 +107,8 @@ class CoopSession {
     [[nodiscard]] const std::map<int, CoopPartyPose> &remoteParties() const;
     void sendLocalPose(const CoopPartyPose &pose);
     void handleTravelDecision(const CoopTravelDecision &decision);
+    void sendActorStates();
+    void applyActorStates();
 
  private:
     std::unique_ptr<CoopServer> _server;
@@ -118,6 +121,9 @@ class CoopSession {
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;
     bool _travelApproved = false;
+    std::vector<CoopActorState> _lastSentActors;
+    MapId _lastSentActorsMap = MAP_INVALID;
+    std::chrono::steady_clock::time_point _lastFullActorUpdate;
 };
 
 extern std::unique_ptr<CoopSession> coopSession;

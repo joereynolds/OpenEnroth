@@ -1,7 +1,9 @@
 #include <chrono>
+#include <map>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include "Testing/Game/GameTest.h"
 
@@ -15,6 +17,7 @@
 #include "Engine/Coop/CoopServer.h"
 #include "Engine/Coop/CoopSession.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
+#include "Engine/Objects/Actor.h"
 
 #include "GUI/GUIWindow.h"
 
@@ -352,4 +355,143 @@ GAME_TEST(Coop, GuestWaitsForHostToStartGame) {
 
     EXPECT_CONTAINS(messageBoxTape.flatten(), "Waiting for the host to start a game...");
     EXPECT_EQ(server.remoteParties().size(), 1);
+}
+
+GAME_TEST(Coop, HostSendsMonsters) {
+    // A guest gets the monsters on the host's map, where the host has them.
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+
+    std::map<int, CoopActorState> latest;
+    bool gotFullUpdate = false;
+    for (int i = 0; i < 100 && !(gotFullUpdate && std::ssize(latest) == std::ssize(pActors)); i++) { // Encounters spawn more monsters in the first frames.
+        game.tick();
+        guest.update();
+        for (const CoopActorStates &states : guest.takeActorStates()) {
+            EXPECT_EQ(states.map, MAP_EMERALD_ISLAND);
+            gotFullUpdate |= std::ssize(states.actors) == states.actorCount && states.actorCount == std::ssize(pActors);
+            for (const CoopActorState &state : states.actors)
+                latest[state.index] = state;
+        }
+    }
+    ASSERT_TRUE(gotFullUpdate);
+    ASSERT_EQ(std::ssize(latest), std::ssize(pActors));
+    for (const auto &[index, state] : latest) {
+        EXPECT_EQ(state.monster, pActors[index].monsterInfo.id);
+        EXPECT_EQ(state.pos, pActors[index].pos);
+        EXPECT_EQ(state.aiState, pActors[index].aiState);
+        EXPECT_EQ(state.hp, pActors[index].hp);
+    }
+}
+
+GAME_TEST(Coop, GuestMonstersFollowHost) {
+    // A guest's monsters don't act on their own, they stand where the host's game puts them and die when it says so.
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    ASSERT_GT(pActors.size(), 0);
+    auto posTape = actorTapes.custom(0, [](const Actor &actor) { return actor.pos; });
+    auto stateTape = actorTapes.aiState(0);
+    auto movedTape = tapes.custom([positions = std::vector<Vec3f>()]() mutable {
+        int moved = 0;
+        for (int i = 0; i < std::ssize(pActors); i++)
+            moved += i < std::ssize(positions) && positions[i] != pActors[i].pos;
+        positions.clear();
+        for (const Actor &actor : pActors)
+            positions.push_back(actor.pos);
+        return moved;
+    });
+    test.startTaping();
+
+    game.tick(20); // Long enough for the monsters on the beach to start wandering if they were left to themselves.
+    Vec3f startPos = pActors[0].pos;
+    CoopActorStates states;
+    states.map = MAP_EMERALD_ISLAND;
+    states.actorCount = pActors.size();
+    CoopActorState dead;
+    dead.index = 0;
+    dead.monster = pActors[0].monsterInfo.id;
+    dead.pos = startPos + Vec3f(100, 0, 0);
+    dead.yaw = pActors[0].yawAngle;
+    dead.sectorId = pActors[0].sectorId;
+    dead.aiState = Dead;
+    dead.animation = ANIM_Dead;
+    states.actors = {dead};
+    server.sendActorStates(states);
+    for (int i = 0; i < 100 && pActors[0].aiState != Dead; i++) {
+        server.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(posTape, tape(startPos, startPos + Vec3f(100, 0, 0)));
+    EXPECT_EQ(stateTape.back(), Dead);
+    EXPECT_EQ(movedTape.filter([](int moved) { return moved > 1; }).size(), 0); // Only the monster the host moved ever moves.
+}
+
+GAME_TEST(Coop, GuestMatchesHostMonsterList) {
+    // Encounters spawn at random, so the guest's monster list can differ from the host's. The guest takes over the
+    // host's monsters, their number and their kinds.
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    int guestCount = pActors.size();
+    ASSERT_GE(guestCount, 2);
+    ASSERT_NE(pActors[1].monsterInfo.id, MONSTER_GOBLIN_A);
+    test.startTaping();
+
+    CoopActorState goblin;
+    goblin.monster = MONSTER_GOBLIN_A;
+    goblin.pos = pActors[1].pos;
+    goblin.hp = 10;
+    CoopActorStates more;
+    more.map = MAP_EMERALD_ISLAND;
+    more.actorCount = guestCount + 1;
+    more.actors = {goblin, goblin};
+    more.actors[0].index = 1;
+    more.actors[1].index = guestCount;
+    server.sendActorStates(more);
+    for (int i = 0; i < 100 && std::ssize(pActors) == guestCount; i++) {
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(std::ssize(pActors), guestCount + 1);
+    EXPECT_EQ(pActors[1].monsterInfo.id, MONSTER_GOBLIN_A);
+    EXPECT_EQ(pActors[guestCount].monsterInfo.id, MONSTER_GOBLIN_A);
+    EXPECT_EQ(pActors[guestCount].pos, goblin.pos);
+    EXPECT_EQ(pActors[guestCount].aiState, Standing);
+
+    CoopActorStates fewer;
+    fewer.map = MAP_EMERALD_ISLAND;
+    fewer.actorCount = 1;
+    server.sendActorStates(fewer);
+    for (int i = 0; i < 100 && pActors[1].aiState != Removed; i++) {
+        server.update();
+        game.tick();
+    }
+    EXPECT_NE(pActors[0].aiState, Removed);
+    for (int i = 1; i < std::ssize(pActors); i++)
+        EXPECT_EQ(pActors[i].aiState, Removed) << "Actor " << i;
 }
