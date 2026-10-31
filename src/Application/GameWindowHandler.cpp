@@ -20,6 +20,7 @@
 #include "Engine/Graphics/Renderer/Renderer.h"
 #include "Engine/EngineIocContainer.h"
 #include "Engine/Timer.h"
+#include "Engine/Coop/CoopSession.h"
 
 #include "GUI/GUIWindow.h"
 #include "GUI/GUIMessageQueue.h"
@@ -383,6 +384,9 @@ void GameWindowHandler::OnActivated() {
 }
 
 void GameWindowHandler::OnDeactivated() {
+    if (coopSession)
+        return; // The other players' games don't stop, and a co-op game that stopped answering would be dropped.
+
     if (!(engineFlags & ENGINE_APP_INACTIVE)) {
         // dword_4E98BC_bApplicationActive = 0;
 

@@ -1,9 +1,11 @@
+#include <memory>
 #include <optional>
 #include <utility>
 
 #include "Testing/Game/GameTest.h"
 
 #include "Engine/Engine.h"
+#include "Engine/EngineGlobals.h"
 #include "Engine/MapEnums.h"
 #include "Engine/Party.h"
 #include "Engine/RemoteParty.h"
@@ -14,6 +16,9 @@
 #include "Engine/Graphics/Renderer/Renderer.h"
 
 #include "GUI/GUIWindow.h"
+
+#include "Library/Platform/Application/PlatformApplication.h"
+#include "Library/Platform/Interface/PlatformEvents.h"
 
 #include "Utility/ScopeGuard.h"
 
@@ -299,4 +304,24 @@ GAME_TEST(Coop, TravelPromptClosesWhenSomeoneElseRefuses) {
     EXPECT_EQ(screenTape.back(), SCREEN_GAME);
     EXPECT_FALSE(coopSession->pendingVote());
     EXPECT_CONTAINS(statusTape, "Other doesn't want to travel to Harmondale");
+}
+
+GAME_TEST(Coop, HostKeepsRunningWithoutFocus) {
+    // A hosting game whose window lost focus stopped answering the network, so a guest started on the same machine,
+    // which takes the focus, couldn't join.
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    auto deactivate = std::make_unique<PlatformWindowEvent>();
+    deactivate->type = EVENT_WINDOW_DEACTIVATE;
+    deactivate->window = ::application->window();
+    game.postEvent(std::move(deactivate));
+    game.tick();
+
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    EXPECT_EQ(guest.state(), COOP_CLIENT_JOINED);
 }
