@@ -94,7 +94,13 @@ void CoopServer::handleHello(NetPeerId peer, const CoopHello &hello) {
     }
 
     if (hello.protocolVersion != COOP_PROTOCOL_VERSION) {
-        reject(peer, fmt::format("Protocol version mismatch, host has {} and client has {}", COOP_PROTOCOL_VERSION, hello.protocolVersion));
+        reject(peer, CoopReject{.reason = fmt::format("Protocol version mismatch, host has {} and client has {}", COOP_PROTOCOL_VERSION, hello.protocolVersion)});
+        return;
+    }
+
+    Blob saveGame = _saveGameProvider();
+    if (!saveGame) {
+        reject(peer, CoopReject{.reason = "The host hasn't started a game yet", .retryLater = true});
         return;
     }
 
@@ -104,7 +110,7 @@ void CoopServer::handleHello(NetPeerId peer, const CoopHello &hello) {
 
     CoopWelcome welcome;
     welcome.playerId = client.playerId;
-    welcome.saveGame = _saveGameProvider();
+    welcome.saveGame = std::move(saveGame);
     send(peer, NET_CHANNEL_RELIABLE, std::move(welcome));
 
     // Reliable, so that the newcomer sees everyone on its first frame in the game.
@@ -223,11 +229,9 @@ std::string CoopServer::playerName(int playerId) const {
     return {};
 }
 
-void CoopServer::reject(NetPeerId peer, std::string reason) {
-    MM_INFO("Rejecting co-op client: {}", reason);
+void CoopServer::reject(NetPeerId peer, CoopReject message) {
+    MM_INFO("Rejecting co-op client: {}", message.reason);
 
-    CoopReject message;
-    message.reason = std::move(reason);
     send(peer, NET_CHANNEL_RELIABLE, std::move(message));
     _net->disconnect(peer);
 }

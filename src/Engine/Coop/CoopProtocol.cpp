@@ -60,10 +60,12 @@ static void deserializeBody(InputStream &src, CoopWelcome *dst) {
 
 static void serializeBody(const CoopReject &src, OutputStream *dst) {
     serialize(src.reason, dst);
+    serializeBool(src.retryLater, dst);
 }
 
 static void deserializeBody(InputStream &src, CoopReject *dst) {
     deserialize(src, &dst->reason);
+    dst->retryLater = deserializeBool(src);
 }
 
 static void serializeBody(const CoopPartyPose &src, OutputStream *dst) {

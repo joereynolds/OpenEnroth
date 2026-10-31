@@ -13,6 +13,7 @@
 #include "Engine/Timer.h"
 #include "Engine/Tables/MapTable.h"
 
+#include "GUI/GUIWindow.h"
 #include "GUI/UI/UIStatusBar.h"
 
 #include "Utility/String/Format.h"
@@ -33,15 +34,27 @@ CoopSession::~CoopSession() {
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
     std::unique_ptr<CoopSession> result(new CoopSession());
-    result->_server = std::make_unique<CoopServer>(port, maxClients, [] { return createSaveData(false, "Co-op").second; });
+    result->_server = std::make_unique<CoopServer>(port, maxClients, [] {
+        if (GetCurrentMenuID() != MENU_NONE)
+            return Blob(); // Main menu or party creation, there's no world to hand out.
+        return createSaveData(false, "Co-op").second;
+    });
     return result;
 }
 
 std::unique_ptr<CoopSession> CoopSession::join(std::string_view address, int port, std::string_view playerName, Blob guestSave) {
     std::unique_ptr<CoopSession> result(new CoopSession());
     result->_client = std::make_unique<CoopClient>(address, port, playerName);
+    result->_joinAddress = address;
+    result->_joinPort = port;
+    result->_playerName = playerName;
     result->_guestSave = std::move(guestSave);
     return result;
+}
+
+void CoopSession::retryJoin() {
+    assert(_client);
+    _client = std::make_unique<CoopClient>(_joinAddress, _joinPort, _playerName);
 }
 
 Blob CoopSession::takeJoinedSave() {

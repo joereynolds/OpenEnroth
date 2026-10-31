@@ -32,6 +32,7 @@ struct CoopWelcome {
 /** Host to client, refuses a `CoopHello`. The host disconnects right after sending it. */
 struct CoopReject {
     std::string reason;
+    bool retryLater = false; // The host can't take players right now, but may be able to later.
 };
 
 /** Where a party is and where it's looking. Clients send their own, the host relays them to everyone else. */

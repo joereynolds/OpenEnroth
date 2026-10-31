@@ -27,8 +27,9 @@ class CoopServer {
     /**
      * @param port                      Port to listen on, zero picks a free one.
      * @param maxClients                Maximal number of simultaneously connected clients.
-     * @param saveGameProvider          Called whenever a client is accepted, returns the current game serialized
-     *                                  as a save file.
+     * @param saveGameProvider          Called whenever a client says hello, returns the current game serialized
+     *                                  as a save file, or an empty blob if the host isn't in a game. The client is
+     *                                  then asked to try again later.
      * @param hostName                  Name of the host's player, shown to the clients.
      * @throws Exception                If the port couldn't be bound.
      */
@@ -101,7 +102,7 @@ class CoopServer {
     void recordAnswer(int playerId, bool accepted);
     void finishVote(bool approved, std::string declinedBy);
     [[nodiscard]] std::string playerName(int playerId) const;
-    void reject(NetPeerId peer, std::string reason);
+    void reject(NetPeerId peer, CoopReject message);
     void send(NetPeerId peer, NetChannel channel, CoopMessage message);
     void sendToJoined(NetChannel channel, CoopMessage message, NetPeerId except = -1);
 

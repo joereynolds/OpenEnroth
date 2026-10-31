@@ -17,6 +17,7 @@
 #include "Engine/EngineCallObserver.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Interaction.h"
+#include "Engine/Coop/CoopServer.h"
 #include "Engine/Coop/CoopSession.h"
 #include "Engine/Data/AwardEnums.h"
 #include "Engine/Data/HouseEnumFunctions.h"
@@ -131,6 +132,15 @@ int Game::run() {
     window->activate();
     ::eventLoop->processMessages(eventHandler);
 
+    if (_coopOptions.hostPort) {
+        try {
+            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS);
+            MM_INFO("Hosting co-op game on port {}", *_coopOptions.hostPort);
+        } catch (const std::exception &e) {
+            MM_ERROR("Could not host co-op game on port {}: {}", *_coopOptions.hostPort, e.what());
+        }
+    }
+
     if (!_coopOptions.joinAddress.empty()) {
         try {
             Blob guestSave;
@@ -153,6 +163,9 @@ int Game::run() {
                 render->BeginScene2D();
 
                 fsm->update();
+
+                if (coopSession && coopSession->server())
+                    coopSession->server()->update(); // Turns joining players away until a game is running.
 
                 // This method should be interpreted as a future RetainedUISystem::update()
                 // It does update all the GUIWindow alive + it does various hacks
@@ -1537,15 +1550,6 @@ void Game::gameLoop() {
         uGameState = GAME_STATE_PLAYING;
         assert(!engine->_pendingLoadFileName.empty());
         loadGame(std::exchange(engine->_pendingLoadFileName, {}));
-    }
-
-    if (_coopOptions.hostPort && !coopSession) {
-        try {
-            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS);
-            MM_INFO("Hosting co-op game on port {}", *_coopOptions.hostPort);
-        } catch (const std::exception &e) {
-            MM_ERROR("Could not host co-op game on port {}: {}", *_coopOptions.hostPort, e.what());
-        }
     }
 
     extern bool use_music_folder;

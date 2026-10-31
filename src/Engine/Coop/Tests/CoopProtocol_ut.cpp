@@ -39,11 +39,14 @@ UNIT_TEST(CoopProtocol, WelcomeRoundTrip) {
 }
 
 UNIT_TEST(CoopProtocol, RejectRoundTrip) {
-    // A reject keeps its reason.
+    // A reject keeps its reason and whether to retry.
     CoopReject reject;
     reject.reason = "Version mismatch";
+    reject.retryLater = true;
 
-    EXPECT_EQ(roundTrip(reject).reason, "Version mismatch");
+    CoopReject decoded = roundTrip(reject);
+    EXPECT_EQ(decoded.reason, "Version mismatch");
+    EXPECT_TRUE(decoded.retryLater);
 }
 
 UNIT_TEST(CoopProtocol, PartyPoseRoundTrip) {

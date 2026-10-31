@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "Library/Geometry/Vec.h"
@@ -26,7 +27,8 @@ class CoopSession {
     /**
      * @param port                      Port to listen on, zero picks a free one.
      * @param maxClients                Maximal number of simultaneously connected clients.
-     * @return                          Host session. Clients that join get the current game as a save.
+     * @return                          Host session. Clients that join get the current game as a save, and are asked to
+     *                                  come back later while the host isn't in a game.
      * @throws Exception                If the port couldn't be bound.
      */
     [[nodiscard]] static std::unique_ptr<CoopSession> host(int port, int maxClients);
@@ -57,6 +59,11 @@ class CoopSession {
     [[nodiscard]] CoopClient *client() const {
         return _client.get();
     }
+
+    /**
+     * Drops a client session's failed attempt and starts joining the same host again.
+     */
+    void retryJoin();
 
     /**
      * @return                          Save to load on the guest's side once joined, the host's world with the guest's
@@ -103,6 +110,9 @@ class CoopSession {
  private:
     std::unique_ptr<CoopServer> _server;
     std::unique_ptr<CoopClient> _client;
+    std::string _joinAddress;
+    int _joinPort = 0;
+    std::string _playerName;
     Blob _guestSave;
     std::optional<Vec3f> _lastFramePos;
     std::optional<CoopPartyPose> _lastSentPose;

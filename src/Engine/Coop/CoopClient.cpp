@@ -29,6 +29,7 @@ void CoopClient::update() {
             break;
         }
         case NET_EVENT_DISCONNECTED:
+            _canRetry = _host == -1;
             fail(_host == -1 ? "Could not connect to the host" : "Disconnected from the host");
             break;
         case NET_EVENT_MESSAGE:
@@ -88,6 +89,7 @@ void CoopClient::handleMessage(CoopMessage message) {
         _saveGame = std::move(welcome->saveGame);
         MM_INFO("Joined co-op game as player {}", _playerId);
     } else if (CoopReject *reject = std::get_if<CoopReject>(&message)) {
+        _canRetry = reject->retryLater;
         fail(fmt::format("Host refused to let us in: {}", reject->reason));
     } else if (const CoopPartyPose *pose = std::get_if<CoopPartyPose>(&message)) {
         _remoteParties[pose->playerId] = *pose;

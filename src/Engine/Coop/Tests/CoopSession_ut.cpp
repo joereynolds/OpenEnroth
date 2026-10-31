@@ -101,6 +101,7 @@ UNIT_TEST(CoopSession, WrongProtocolVersionIsRejected) {
     ASSERT_TRUE(reply);
     ASSERT_TRUE(std::holds_alternative<CoopReject>(*reply));
     EXPECT_TRUE(std::get<CoopReject>(*reply).reason.contains("version"));
+    EXPECT_FALSE(std::get<CoopReject>(*reply).retryLater);
     EXPECT_TRUE(disconnected);
 }
 
@@ -302,4 +303,15 @@ UNIT_TEST(CoopSession, LeavingVoterDoesNotBlockTravel) {
         return decision.has_value();
     }));
     EXPECT_TRUE(decision->approved);
+}
+
+UNIT_TEST(CoopSession, HostWithoutGameAsksToRetry) {
+    // A host that isn't in a game turns a client away, telling it to try again later.
+    CoopServer server(0, 4, [] { return Blob(); });
+    auto client = std::make_unique<CoopClient>("127.0.0.1", server.port(), "Early");
+    ASSERT_TRUE(pumpUntil(&server, {client.get()}, [&] { return client->state() != COOP_CLIENT_CONNECTING; }));
+
+    EXPECT_EQ(client->state(), COOP_CLIENT_FAILED);
+    EXPECT_TRUE(client->canRetry());
+    EXPECT_TRUE(client->failureReason().contains("hasn't started a game yet"));
 }

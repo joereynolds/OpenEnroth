@@ -47,6 +47,14 @@ class CoopClient {
     }
 
     /**
+     * @return                          Whether joining again later may succeed where this attempt failed, e.g. because
+     *                                  the host wasn't reachable or wasn't in a game yet.
+     */
+    [[nodiscard]] bool canRetry() const {
+        return _canRetry;
+    }
+
+    /**
      * @return                          Player id the host assigned, -1 until joined.
      */
     [[nodiscard]] int playerId() const {
@@ -112,6 +120,7 @@ class CoopClient {
     NetPeerId _host = -1;
     CoopClientState _state = COOP_CLIENT_CONNECTING;
     std::string _failureReason;
+    bool _canRetry = false;
     int _playerId = -1;
     Blob _saveGame;
     std::map<int, CoopPartyPose> _remoteParties;

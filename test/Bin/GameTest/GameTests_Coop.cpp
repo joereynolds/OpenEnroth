@@ -1,3 +1,4 @@
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -324,4 +325,31 @@ GAME_TEST(Coop, HostKeepsRunningWithoutFocus) {
         guest.update();
     }
     EXPECT_EQ(guest.state(), COOP_CLIENT_JOINED);
+}
+
+GAME_TEST(Coop, GuestWaitsForHostToStartGame) {
+    // A guest that connects before the host is in a game waits, and joins once the host has a game going.
+    auto messageBoxTape = tapes.messageBoxes();
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    bool hostInGame = false;
+    CoopServer server(0, 4, [&] { return hostInGame ? Blob::share(hostSave) : Blob(); });
+    game.goToMainMenu();
+    test.startTaping();
+
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && !messageBoxTape.flatten().contains("Waiting for the host to start a game..."); i++) {
+        server.update();
+        game.tick();
+    }
+    hostInGame = true;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10); // Retries go by wall clock time.
+    while (server.remoteParties().empty() && std::chrono::steady_clock::now() < deadline) {
+        server.update();
+        game.tick();
+    }
+
+    EXPECT_CONTAINS(messageBoxTape.flatten(), "Waiting for the host to start a game...");
+    EXPECT_EQ(server.remoteParties().size(), 1);
 }
