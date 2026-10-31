@@ -187,6 +187,19 @@ UNIT_TEST(CoopProtocol, ActorDamageRoundTrip) {
     EXPECT_EQ(decoded.damage, 123);
 }
 
+UNIT_TEST(CoopProtocol, PartyHitRoundTrip) {
+    // A party hit keeps the map, the attacker and its ability.
+    CoopPartyHit hit;
+    hit.map = MAP_BARROW_DOWNS;
+    hit.attackerIndex = 11;
+    hit.ability = ABILITY_SPELL2;
+
+    CoopPartyHit decoded = roundTrip(hit);
+    EXPECT_EQ(decoded.map, MAP_BARROW_DOWNS);
+    EXPECT_EQ(decoded.attackerIndex, 11);
+    EXPECT_EQ(decoded.ability, ABILITY_SPELL2);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

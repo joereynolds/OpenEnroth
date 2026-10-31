@@ -101,6 +101,12 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopActorStates> takeActorStates();
 
     /**
+     * @return                          Monster attacks on this client's party received since the last call, oldest
+     *                                  first.
+     */
+    [[nodiscard]] std::vector<CoopPartyHit> takePartyHits();
+
+    /**
      * Asks the host to put a trip to a vote. Does nothing until joined. The outcome is reported by
      * `takeTravelDecision`.
      *
@@ -145,4 +151,5 @@ class CoopClient {
     std::optional<CoopTravelVote> _pendingVote;
     std::optional<CoopTravelDecision> _travelDecision;
     std::vector<CoopActorStates> _actorStates;
+    std::vector<CoopPartyHit> _partyHits;
 };

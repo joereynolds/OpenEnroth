@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -607,4 +608,79 @@ GAME_TEST(Coop, MonstersGoAfterGuests) {
         bool cameAtGuest = stateTape.contains(Pursuing) || stateTape.contains(AttackingMelee);
         EXPECT_EQ(cameAtGuest, guestNearby);
     }
+}
+
+GAME_TEST(Coop, MonsterHitsReachGuest) {
+    // A monster's attack on a guest's party is sent to the guest, the actor that stands in for the guest on the host
+    // takes no damage.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    Vec3f guestPos(2386, 9696, 960); // In front of the fire guild's door, far from the host at the bridge.
+    int goblin = game.spawnMonster(guestPos + Vec3f(0, -100, 0), MONSTER_GOBLIN_A)->id;
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    CoopPartyPose pose;
+    pose.map = MAP_EMERALD_ISLAND;
+    pose.pos = guestPos;
+    auto findStandIn = [] { return std::ranges::find_if(pActors, [](const Actor &actor) { return actor.attributes & ACTOR_COOP_STAND_IN; }); };
+    for (int i = 0; i < 100 && findStandIn() == pActors.end(); i++) {
+        guest.sendLocalPose(pose);
+        guest.update();
+        game.tick();
+    }
+    ASSERT_NE(findStandIn(), pActors.end());
+    auto standInHpTape = actorTapes.hp(findStandIn()->id);
+    test.startTaping();
+
+    auto fromGoblin = [&](const CoopPartyHit &hit) { return hit.attackerIndex == goblin; };
+    std::vector<CoopPartyHit> hits;
+    for (int i = 0; i < 300 && !std::ranges::any_of(hits, fromGoblin); i++) { // The goblin walks up and swings.
+        guest.sendLocalPose(pose);
+        guest.update();
+        game.tick();
+        for (const CoopPartyHit &hit : guest.takePartyHits())
+            hits.push_back(hit);
+    }
+
+    ASSERT_TRUE(std::ranges::any_of(hits, fromGoblin));
+    EXPECT_EQ(hits[0].map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(standInHpTape.size(), 1);
+}
+
+GAME_TEST(Coop, GuestTakesMonsterHits) {
+    // A monster attack the host reports hurts the guest's party.
+    auto hpTape = tapes.totalHp();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 100, 0), MONSTER_GOBLIN_A)->id;
+    int playerId = server.remoteParties().begin()->first;
+    test.startTaping();
+
+    for (int i = 0; i < 50 && hpTape.size() < 2; i++) { // Some swings miss.
+        server.sendPartyHit(playerId, CoopPartyHit{MAP_EMERALD_ISLAND, goblin, ABILITY_ATTACK1});
+        server.update();
+        game.tick();
+    }
+
+    EXPECT_LT(hpTape.delta(), 0);
 }

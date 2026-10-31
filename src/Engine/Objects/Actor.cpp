@@ -2300,6 +2300,11 @@ void Actor::ActorDamageFromMonster(Pid attacker_id,
                  .field_60_distance_related_prolly_lod;
         attacker_id = pSpriteObjects[attacker_id.id()].spell_caster_pid;
     }
+    if (pActors[actor_id].attributes & ACTOR_COOP_STAND_IN) {
+        if (attacker_id.type() == OBJECT_Actor)
+            engine->_standInHits.push_back(StandInHit{static_cast<int>(actor_id), attacker_id.id(), a4}); // The guest's game rolls it against its party.
+        return;
+    }
     if (attacker_id.type() == OBJECT_Actor) {
         if (!pActors[actor_id].IsNotAlive()) {
             pActors[actor_id].lastCharacterIdToHit = attacker_id;

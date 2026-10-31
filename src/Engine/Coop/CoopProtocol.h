@@ -111,9 +111,16 @@ struct CoopActorDamage {
     int damage = 0; // Already reduced by the monster's resistances.
 };
 
+/** Host to a client, a monster on the host's map attacked the client's party. */
+struct CoopPartyHit {
+    MapId map = MAP_INVALID;
+    int attackerIndex = -1; // Index in the map's actor list.
+    ActorAbility ability = ABILITY_ATTACK1;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopTravelRequest, CoopTravelVote, CoopTravelAnswer, CoopTravelDecision,
-                                 CoopActorStates, CoopActorDamage>;
+                                 CoopActorStates, CoopActorDamage, CoopPartyHit>;
 
 /**
  * @param message                       Message to encode.

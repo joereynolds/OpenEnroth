@@ -90,6 +90,10 @@ void CoopClient::sendActorDamage(const CoopActorDamage &damage) {
     _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(damage));
 }
 
+std::vector<CoopPartyHit> CoopClient::takePartyHits() {
+    return std::exchange(_partyHits, {});
+}
+
 std::vector<CoopActorStates> CoopClient::takeActorStates() {
     return std::exchange(_actorStates, {});
 }
@@ -113,6 +117,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _remoteParties.erase(left->playerId);
     } else if (CoopTravelVote *vote = std::get_if<CoopTravelVote>(&message)) {
         _pendingVote = std::move(*vote);
+    } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {
+        _partyHits.push_back(*hit);
     } else if (CoopActorStates *states = std::get_if<CoopActorStates>(&message)) {
         _actorStates.push_back(std::move(*states));
     } else if (CoopTravelDecision *decision = std::get_if<CoopTravelDecision>(&message)) {

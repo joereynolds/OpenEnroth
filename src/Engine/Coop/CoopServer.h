@@ -74,6 +74,14 @@ class CoopServer {
     void sendActorStates(const CoopActorStates &states);
 
     /**
+     * Tells a client that a monster attacked its party. Does nothing if the player has left.
+     *
+     * @param playerId                  Player whose party was attacked.
+     * @param hit                       Who attacked, and how.
+     */
+    void sendPartyHit(int playerId, const CoopPartyHit &hit);
+
+    /**
      * @return                          Damage that clients' parties dealt to monsters since the last call, oldest
      *                                  first.
      */

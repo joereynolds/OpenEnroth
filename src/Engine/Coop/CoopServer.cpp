@@ -59,6 +59,12 @@ void CoopServer::sendActorStates(const CoopActorStates &states) {
     sendToJoined(NET_CHANNEL_UNRELIABLE, states);
 }
 
+void CoopServer::sendPartyHit(int playerId, const CoopPartyHit &hit) {
+    for (const auto &[peer, client] : _clients)
+        if (client.playerId == playerId)
+            send(peer, NET_CHANNEL_RELIABLE, hit);
+}
+
 std::vector<CoopActorDamage> CoopServer::takeActorDamage() {
     return std::exchange(_actorDamage, {});
 }

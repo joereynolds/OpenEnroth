@@ -1,5 +1,6 @@
 #include "CoopSession.h"
 
+#include <algorithm>
 #include <cassert>
 #include <map>
 #include <memory>
@@ -14,6 +15,7 @@
 #include "Engine/Timer.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Objects/Actor.h"
+#include "Engine/Objects/Character.h"
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
 #include "Engine/Tables/MapTable.h"
@@ -38,6 +40,7 @@ CoopSession::~CoopSession() {
     engine->_remoteParties.clear();
     engine->_actorsFollowHost = false;
     engine->_actorHitsForHost.clear();
+    engine->_standInHits.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -90,11 +93,13 @@ void CoopSession::update() {
 
     if (_server) {
         applyActorDamage();
+        sendStandInHits();
         updateStandIns();
         sendActorStates();
     } else {
         sendActorHits();
         applyActorStates();
+        applyPartyHits();
     }
 
     std::optional<CoopTravelDecision> decision = _server ? _server->takeTravelDecision() : _client->takeTravelDecision();
@@ -299,6 +304,25 @@ void CoopSession::updateStandIns() {
         actor.sectorId = uCurrentlyLoadedLevelType == LEVEL_INDOOR ? pIndoor->GetSector(pose.pos) : 0;
         actor.aiState = Standing;
         actor.hp = actor.monsterInfo.hp; // Stand-ins never die, what they're hit with is the guest's to take.
+    }
+}
+
+void CoopSession::sendStandInHits() {
+    for (const StandInHit &hit : std::exchange(engine->_standInHits, {})) {
+        auto pos = std::ranges::find_if(_standIns, [&](const auto &entry) { return entry.second == hit.standInId; });
+        if (pos != _standIns.end())
+            _server->sendPartyHit(pos->first, CoopPartyHit{engine->_currentLoadedMapId, hit.attackerId, hit.ability});
+    }
+}
+
+void CoopSession::applyPartyHits() {
+    for (const CoopPartyHit &hit : _client->takePartyHits()) {
+        if (hit.map != engine->_currentLoadedMapId || hit.attackerIndex < 0 || hit.attackerIndex >= std::ssize(pActors))
+            continue;
+
+        int target = stru_50C198.which_player_to_attack(&pActors[hit.attackerIndex]);
+        if (target != -1)
+            DamageCharacterFromMonster(Pid(OBJECT_Actor, hit.attackerIndex), hit.ability, target);
     }
 }
 
