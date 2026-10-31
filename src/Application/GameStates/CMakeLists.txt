@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
 
 set(APPLICATION_GAME_STATES_SOURCES
+        CoopJoinState.cpp
         CreditsState.cpp
         GameFsmBuilder.cpp
         LoadSlotState.cpp
@@ -10,6 +11,7 @@ set(APPLICATION_GAME_STATES_SOURCES
         VideoState.cpp)
 
 set(APPLICATION_GAME_STATES_HEADERS
+        CoopJoinState.h
         CreditsState.h
         GameFsmBuilder.h
         LoadSlotState.h
@@ -23,6 +25,7 @@ target_check_style(application_game_states)
 
 target_link_libraries(application_game_states
         PUBLIC
+        engine_coop
         library_fsm
         media
         utility)

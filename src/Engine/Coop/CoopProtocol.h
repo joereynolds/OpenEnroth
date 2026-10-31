@@ -12,6 +12,10 @@
 /** Bumped on every change to the messages below, peers with different versions refuse to talk. */
 constexpr int COOP_PROTOCOL_VERSION = 1;
 
+constexpr int COOP_DEFAULT_PORT = 7347;
+
+constexpr int COOP_MAX_CLIENTS = 3; // Four parties in total, counting the host's.
+
 /** Client to host, the first message on a new connection. */
 struct CoopHello {
     int protocolVersion = COOP_PROTOCOL_VERSION;

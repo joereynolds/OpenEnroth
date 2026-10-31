@@ -6,6 +6,7 @@
 #include <utility>
 #include <memory>
 
+#include "CoopJoinState.h"
 #include "CreditsState.h"
 #include "LoadSlotState.h"
 #include "LoadStep2State.h"
@@ -46,6 +47,7 @@ void GameFsmBuilder::_buildMainMenu(FsmBuilder &builder) {
     builder
     .state<MainMenuState>("MainMenu")
         .on("newGame").exitFsm()
+        .on("coopJoin").jumpTo("CoopJoin")
         .on("loadGame").jumpTo("LoadSlot")
         .on("quickLoadGame").exitFsm()
         .on("credits").jumpTo("Credits")
@@ -56,5 +58,8 @@ void GameFsmBuilder::_buildMainMenu(FsmBuilder &builder) {
         .on("back").jumpTo("MainMenu")
 
     .state<CreditsState>("Credits")
-        .on("back").jumpTo("MainMenu");
+        .on("back").jumpTo("MainMenu")
+    .state<CoopJoinState>("CoopJoin")
+        .on("joined").exitFsm()
+        .on("failed").jumpTo("MainMenu");
 }

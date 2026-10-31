@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,10 +14,10 @@
 
 #include "Engine/AssetsManager.h"
 #include "Engine/Engine.h"
-#include "Engine/Coop/CoopSession.h"
 #include "Engine/EngineCallObserver.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Interaction.h"
+#include "Engine/Coop/CoopSession.h"
 #include "Engine/Data/AwardEnums.h"
 #include "Engine/Data/HouseEnumFunctions.h"
 #include "Engine/Evt/Processor.h"
@@ -115,9 +116,10 @@ static void setMinimapZoom(int zoom) {
     viewparams->uMinimapZoom = zoom;
 }
 
-Game::Game(PlatformApplication *application, std::shared_ptr<GameConfig> config) {
+Game::Game(PlatformApplication *application, std::shared_ptr<GameConfig> config, CoopOptions coopOptions) {
     _application = application;
     _config = config;
+    _coopOptions = std::move(coopOptions);
     _menu = std::make_unique<Menu>();
     _decalBuilder = EngineIocContainer::ResolveDecalBuilder();
 }
@@ -127,6 +129,14 @@ Game::~Game() = default;
 int Game::run() {
     window->activate();
     ::eventLoop->processMessages(eventHandler);
+
+    if (!_coopOptions.joinAddress.empty()) {
+        try {
+            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName);
+        } catch (const std::exception &e) {
+            MM_ERROR("Could not join co-op game at '{}:{}': {}", _coopOptions.joinAddress, _coopOptions.joinPort, e.what());
+        }
+    }
 
     std::string_view startingState = "Start";
     // Need to have this do/while external loop till we remove entirely all the states
@@ -1504,6 +1514,15 @@ void Game::gameLoop() {
         uGameState = GAME_STATE_PLAYING;
         assert(!engine->_pendingLoadFileName.empty());
         loadGame(std::exchange(engine->_pendingLoadFileName, {}));
+    }
+
+    if (_coopOptions.hostPort && !coopSession) {
+        try {
+            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS);
+            MM_INFO("Hosting co-op game on port {}", *_coopOptions.hostPort);
+        } catch (const std::exception &e) {
+            MM_ERROR("Could not host co-op game on port {}: {}", *_coopOptions.hostPort, e.what());
+        }
     }
 
     extern bool use_music_folder;

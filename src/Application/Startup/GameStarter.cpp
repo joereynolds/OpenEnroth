@@ -189,7 +189,7 @@ void GameStarter::initialize() {
     _engine->Initialize();
 
     // Init game.
-    _game = std::make_unique<Game>(_application.get(), _config);
+    _game = std::make_unique<Game>(_application.get(), _config, _options.coop);
 
     // Init scripting system.
     _scriptingSystem = std::make_unique<ScriptingSystem>("scripts", "init.lua", *_application, *_logStarter.rootSink());
