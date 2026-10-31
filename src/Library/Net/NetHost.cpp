@@ -138,7 +138,7 @@ void NetHost::broadcast(NetChannel channel, const Blob &data) {
 void NetHost::disconnect(NetPeerId peer) {
     assert(peer >= 0 && peer < static_cast<NetPeerId>(_host->peerCount));
 
-    enet_peer_disconnect(&_host->peers[peer], 0);
+    enet_peer_disconnect_later(&_host->peers[peer], 0); // Plain enet_peer_disconnect drops the peer's queued packets.
 }
 
 void NetHost::flush() {

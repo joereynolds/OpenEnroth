@@ -70,8 +70,8 @@ class NetHost {
     void broadcast(NetChannel channel, const Blob &data);
 
     /**
-     * Starts a graceful disconnect. A `NET_EVENT_DISCONNECTED` event for this peer is reported by `poll` once
-     * the peer acknowledges it.
+     * Starts a graceful disconnect. Messages already queued for this peer are still delivered, and a
+     * `NET_EVENT_DISCONNECTED` event for this peer is reported by `poll` once the peer acknowledges the disconnect.
      *
      * @param peer                      Connected peer to disconnect.
      */

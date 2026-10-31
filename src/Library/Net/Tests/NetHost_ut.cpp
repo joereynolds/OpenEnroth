@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -156,6 +157,33 @@ UNIT_TEST(NetHost, GracefulDisconnect) {
     ASSERT_TRUE(serverEvent);
     EXPECT_EQ(serverEvent->type, NET_EVENT_DISCONNECTED);
     EXPECT_EQ(serverEvent->peer, clientOnServer);
+}
+
+UNIT_TEST(NetHost, MessagesQueuedBeforeDisconnectAreDelivered) {
+    // A message sent right before a disconnect still reaches the peer, ahead of the disconnect.
+    std::unique_ptr<NetHost> server = NetHost::listen(0, 4);
+    std::unique_ptr<NetHost> client = NetHost::connect("127.0.0.1", server->port());
+
+    NetPeerId clientOnServer = -1;
+    NetPeerId serverOnClient = -1;
+    ASSERT_NO_FATAL_FAILURE(connectBoth(server.get(), client.get(), &clientOnServer, &serverOnClient));
+
+    server->send(clientOnServer, NET_CHANNEL_RELIABLE, Blob::fromString("goodbye"));
+    server->disconnect(clientOnServer);
+
+    std::vector<NetEventType> clientEvents;
+    std::string message;
+    auto deadline = std::chrono::steady_clock::now() + TIMEOUT;
+    while (!std::ranges::contains(clientEvents, NET_EVENT_DISCONNECTED) && std::chrono::steady_clock::now() < deadline) {
+        (void) server->poll(1); // The server reports its own disconnect event too, it's not what this test checks.
+        if (std::optional<NetEvent> event = client->poll(1)) {
+            clientEvents.push_back(event->type);
+            if (event->type == NET_EVENT_MESSAGE)
+                message = toString(event->data);
+        }
+    }
+    EXPECT_EQ(clientEvents, std::vector<NetEventType>({NET_EVENT_MESSAGE, NET_EVENT_DISCONNECTED}));
+    EXPECT_EQ(message, "goodbye");
 }
 
 UNIT_TEST(NetHost, DestroyedClientIsReportedRightAway) {
