@@ -50,6 +50,7 @@ These were the players' calls, and the code is built around them. Changing one o
 | Quests | Quest progress is shared, and every party gets the quest rewards. |
 | Rest | Resting needs everyone's agreement. |
 | Turn-based mode | Disabled in co-op. |
+| Hirelings | A guest's hirelings stay behind in the guest's own world, so no NPC can exist twice. |
 
 
 ## Architecture
@@ -229,7 +230,6 @@ Things that will bite you when writing tests:
 * **Chests and ground items** are relayed rather than host-driven, so two players grabbing the same item within one
   round trip can both get it.
 * **Quest rewards** are applied to the same character slots, whoever is in them.
-* **Hirelings** don't come along when a guest joins.
 * **Disconnects:** a guest who loses the host is told so and carries on as a single player game. Rejoining means
   quitting to the main menu and joining again from the co-op screen.
 * **Typing addresses:** text input only knows letters, digits and the period, so host names with a dash can't be
