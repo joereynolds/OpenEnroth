@@ -1,5 +1,6 @@
 #include "CoopServer.h"
 
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <string>
@@ -43,6 +44,10 @@ void CoopServer::update() {
             break;
         }
     }
+}
+
+int CoopServer::joinedClientCount() const {
+    return std::ranges::count_if(_clients, [](const auto &entry) { return entry.second.playerId != -1; });
 }
 
 void CoopServer::flush() {

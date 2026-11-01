@@ -37,7 +37,7 @@ These were the players' calls, and the code is built around them. Changing one o
 | Topic | Decision |
 |-------|----------|
 | Parties | Every player has their own party. All players stay on the same map. |
-| Pausing | The world doesn't pause for one player. A co-op game keeps running when its window loses focus. |
+| Pausing | The world doesn't pause for one player, neither in a menu nor when a game's window loses focus. |
 | Authority | The host is in charge of the world. |
 | Guest party | A guest brings their own party from one of their saves. |
 | Map changes | Anyone can propose a trip. Everyone has to agree, and one refusal cancels it. |
@@ -75,7 +75,10 @@ calls `coopSession->update()` once per frame, after the world update and before 
 
 ### One frame of `CoopSession::update`
 
-1. Poll the network.
+1. Poll the network. On the host, keep `gameTimer` running through pauses while any guest is joined
+   (`Timer::setKeepsRunning`), because the guests' monsters are the host's. A frame's step is capped meanwhile, so
+   blocking work like saving doesn't land on the world in one step. Map loads still pause, `PrepareWorld` switches
+   this off while it loads.
 2. Send the local party's pose if it changed, and once a second regardless, because poses travel unreliably.
 3. On the host: apply guests' hits on monsters, hand out loot, send monster attacks on stand-ins to their guests, move
    the stand-ins, and send monster states.
@@ -122,7 +125,7 @@ There are three ways something gets shared:
 | Ground item pickups | Relayed | `CoopGroundItemTaken`. Matched by item kind and nearest position, since indices differ between games. |
 | Map changes | Voted | `COOP_VOTE_TRAVEL`. Every map change ends up in the game loop's `GAME_STATE_CHANGE_LOCATION` branch, and that's where it's turned into a vote. |
 | Rest | Voted | `COOP_VOTE_REST`. Once approved, every game opens the rest window and rests normally. |
-| Game time | Host-driven | `CoopClock`, every 30 game seconds. A guest more than a game minute off catches up through the normal time step, so day changes still happen, or steps back without side effects. Not while the guest rests. |
+| Game time | Host-driven | `CoopClock`, every 30 game seconds. A guest more than a game minute off follows it, see `syncClock`. |
 
 ### Monsters in detail
 

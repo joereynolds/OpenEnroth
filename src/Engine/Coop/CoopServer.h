@@ -48,6 +48,11 @@ class CoopServer {
     void update();
 
     /**
+     * @return                          Number of clients that have joined.
+     */
+    [[nodiscard]] int joinedClientCount() const;
+
+    /**
      * Sends everything queued so far right away instead of on the next `update`.
      */
     void flush();

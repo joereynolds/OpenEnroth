@@ -641,6 +641,8 @@ void PrepareWorld(int _0_box_loading_1_fullscreen) {
     Vis *vis = EngineIocContainer::ResolveVis();
 
     CastSpellInfoHelpers::cancelSpellCastInProgress();
+    bool keepsRunning = gameTimer->keepsRunning();
+    gameTimer->setKeepsRunning(false); // Loading a map stops the world even for a co-op host.
     gameTimer->setPaused(true);
     animTimer->setPaused(true);
     DoPrepareWorld(false, (_0_box_loading_1_fullscreen == 0) + 1);
@@ -649,6 +651,7 @@ void PrepareWorld(int _0_box_loading_1_fullscreen) {
     assert(animTimer->isPaused());
     animTimer->setPaused(false);
     gameTimer->setPaused(false);
+    gameTimer->setKeepsRunning(keepsRunning);
 }
 
 /**

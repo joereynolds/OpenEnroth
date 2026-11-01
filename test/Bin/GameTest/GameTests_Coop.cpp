@@ -1300,3 +1300,38 @@ GAME_TEST(Coop, GuestFollowsHostClock) {
         }
     }
 }
+
+GAME_TEST(Coop, HostMenusDontPauseTheWorld) {
+    // With the spellbook open, the host's monsters froze for everyone, guests included. The host's world has to keep
+    // running while a guest plays, and still pauses like in single player when nobody has joined.
+    for (bool guestJoined : {false, true}) {
+        SCOPED_TRACE(fmt::format("guestJoined={}", guestJoined));
+        test.prepareForNextTest();
+        engine->config->debug.NoActors.setValue(true);
+        game.startNewGame();
+        prepareForBattleTest();
+        engine->config->debug.NoActors.setValue(false);
+        int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A)->id;
+        auto goblinPosTape = actorTapes.custom(goblin, [](const Actor &actor) { return actor.pos; });
+        auto screenTape = tapes.screen();
+        coopSession = CoopSession::host(0, 4);
+        MM_AT_SCOPE_EXIT(coopSession.reset());
+        std::optional<CoopClient> guest;
+        if (guestJoined) {
+            guest.emplace("127.0.0.1", coopSession->server()->port(), "Guest");
+            for (int i = 0; i < 100 && guest->state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+                game.tick();
+                guest->update();
+            }
+            ASSERT_EQ(guest->state(), COOP_CLIENT_JOINED);
+        }
+
+        game.pressGuiButton("Game_CastSpell");
+        game.tick();
+        test.startTaping();
+        game.tick(20); // The goblin spots the party and comes at it, unless the world is paused.
+
+        EXPECT_EQ(screenTape, tape(SCREEN_SPELL_BOOK));
+        EXPECT_EQ(goblinPosTape.size() > 1, guestJoined);
+    }
+}

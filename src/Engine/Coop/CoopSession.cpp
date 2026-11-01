@@ -50,6 +50,8 @@ CoopSession::CoopSession() {
 CoopSession::~CoopSession() {
     engine->_remoteParties.clear();
     engine->_actorsFollowHost = false;
+    if (gameTimer)
+        gameTimer->setKeepsRunning(false);
     engine->_actorHitsForHost.clear();
     engine->_standInHits.clear();
     engine->_lootRequestsForHost.clear();
@@ -96,6 +98,7 @@ Blob CoopSession::takeJoinedSave() {
 void CoopSession::update() {
     if (_server) {
         _server->update();
+        gameTimer->setKeepsRunning(_server->joinedClientCount() > 0); // The guests' monsters are the host's.
     } else {
         _client->update();
     }
