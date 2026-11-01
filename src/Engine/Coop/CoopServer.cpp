@@ -118,6 +118,10 @@ void CoopServer::sendClock(const CoopClock &clock) {
     sendToJoined(NET_CHANNEL_UNRELIABLE, clock);
 }
 
+std::vector<CoopActorBuff> CoopServer::takeActorBuffs() {
+    return std::exchange(_actorBuffs, {});
+}
+
 void CoopServer::sendLoot(int playerId, const CoopLoot &loot) {
     for (const auto &[peer, client] : _clients)
         if (client.playerId == playerId)
@@ -173,6 +177,9 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopGroundItemTaken *taken = std::get_if<CoopGroundItemTaken>(&message)) {
         taken->playerId = _clients[peer].playerId;
         _groundItemsTaken.push_back(*taken);
+    } else if (CoopActorBuff *buff = std::get_if<CoopActorBuff>(&message)) {
+        buff->playerId = _clients[peer].playerId;
+        _actorBuffs.push_back(*buff);
     } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
         request->playerId = _clients[peer].playerId;
         _lootRequests.push_back(std::move(*request));

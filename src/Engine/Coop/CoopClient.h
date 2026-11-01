@@ -155,6 +155,13 @@ class CoopClient {
     [[nodiscard]] std::optional<CoopClock> takeClock();
 
     /**
+     * Tells the host that this client's party put a spell effect on a monster. Does nothing until joined.
+     *
+     * @param buff                      The monster and the effect.
+     */
+    void sendActorBuff(const CoopActorBuff &buff);
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.

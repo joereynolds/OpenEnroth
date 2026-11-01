@@ -13,6 +13,7 @@
 #include "Engine/Objects/Chest.h"
 #include "Engine/Objects/Item.h"
 #include "Engine/Objects/MonsterEnums.h"
+#include "Engine/Spells/SpellBuff.h"
 
 #include "Core/Time/Duration.h"
 #include "Core/Time/Time.h"
@@ -178,10 +179,20 @@ struct CoopClock {
     Time playingTime;
 };
 
+/** Client to host, the client's party put a spell effect on a monster, like paralysis or halved armor. */
+struct CoopActorBuff {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    int index = -1; // Index in the map's actor list.
+    ActorBuff buff = ACTOR_BUFF_CHARM;
+    SpellBuff value;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
-                                 CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock>;
+                                 CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock,
+                                 CoopActorBuff>;
 
 /**
  * @param message                       Message to encode.

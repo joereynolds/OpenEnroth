@@ -1361,3 +1361,70 @@ GAME_TEST(Coop, GuestCarriesOnAloneWhenHostLeaves) {
     EXPECT_FALSE(engine->_actorsFollowHost);
     EXPECT_CONTAINS(statusTape, "Lost the co-op game: Disconnected from the host. You're playing alone now.");
 }
+
+GAME_TEST(Coop, GuestSpellEffectsReachHostMonsters) {
+    // A spell effect a guest's party puts on a monster, like paralysis, takes hold of the host's monster too.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto paralyzedTape = actorTapes.hasBuff(goblin, ACTOR_BUFF_PARALYZED);
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the goblin before the effect.
+
+    CoopActorBuff paralysis{.map = MAP_EMERALD_ISLAND, .index = goblin, .buff = ACTOR_BUFF_PARALYZED};
+    paralysis.value.Apply(pParty->GetPlayingTime() + Duration::fromHours(1), MASTERY_GRANDMASTER, 0, 0, 0);
+    guest.sendActorBuff(paralysis);
+    for (int i = 0; i < 100 && !pActors[goblin].buffs[ACTOR_BUFF_PARALYZED].Active(); i++) { // The guest sends what it queued only when updated.
+        guest.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(paralyzedTape, tape(false, true));
+}
+
+GAME_TEST(Coop, GuestArmorHalvingReachesHost) {
+    // A guest's grandmaster axe halving a monster's armor tells the host about it.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest({{CLASS_RANGER_LORD, RACE_GOBLIN}});
+    Character &axeman = pParty->pCharacters[0];
+    axeman.inventory.equip(ITEM_SLOT_MAIN_HAND, Item(ITEM_BATTLE_AXE));
+    axeman.setSkillValue(SKILL_AXE, CombinedSkillValue(60, MASTERY_GRANDMASTER)); // Every grandmaster hit procs on a dummy, which never resists.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int titan = game.spawnMonster(pParty->pos + Vec3f(0, 300, 0), MONSTER_TITAN_A, SPAWN_DUMMY)->id;
+    test.startTaping();
+
+    std::vector<CoopActorBuff> buffs;
+    auto halved = [&] { return std::ranges::any_of(buffs, [&](const CoopActorBuff &buff) { return buff.buff == ACTOR_BUFF_HALVED_ARMOR; }); };
+    for (int i = 0; i < 30 && !halved(); i++) {
+        game.pressAndReleaseKey(PlatformKey::KEY_A);
+        game.tick(5); // The swing lands, and the recovery passes.
+        server.update();
+        for (const CoopActorBuff &buff : server.takeActorBuffs())
+            buffs.push_back(buff);
+    }
+
+    ASSERT_TRUE(halved());
+    EXPECT_EQ(buffs.back().index, titan);
+    EXPECT_EQ(buffs.back().value.expireTime, pActors[titan].buffs[ACTOR_BUFF_HALVED_ARMOR].expireTime);
+}

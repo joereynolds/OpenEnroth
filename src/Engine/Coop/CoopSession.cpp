@@ -113,12 +113,14 @@ void CoopSession::update() {
 
     if (_server) {
         applyActorDamage();
+        applyActorBuffs();
         handOutLoot();
         sendStandInHits();
         updateStandIns();
         sendActorStates();
     } else {
         sendActorHits();
+        sendActorBuffs();
         sendLootRequests();
         applyActorStates();
         applyPartyHits();
@@ -584,6 +586,35 @@ void CoopSession::applyPartyHits() {
         if (target != -1)
             DamageCharacterFromMonster(Pid(OBJECT_Actor, hit.attackerIndex), hit.ability, target);
     }
+}
+
+static bool sameBuff(const SpellBuff &l, const SpellBuff &r) {
+    return l.expireTime == r.expireTime && l.power == r.power && l.skillMastery == r.skillMastery && l.caster == r.caster;
+}
+
+void CoopSession::sendActorBuffs() {
+    // Guests don't run monster AI and the host's updates leave buffs alone, so any change here is the local party's.
+    if (_lastActorBuffsMap != engine->_currentLoadedMapId) {
+        _lastActorBuffs.clear();
+        _lastActorBuffsMap = engine->_currentLoadedMapId;
+    }
+    while (_lastActorBuffs.size() < pActors.size())
+        _lastActorBuffs.push_back(pActors[_lastActorBuffs.size()].buffs);
+
+    for (int i = 0; i < std::ssize(pActors); i++) {
+        for (ActorBuff buff : pActors[i].buffs.indices()) {
+            if (sameBuff(pActors[i].buffs[buff], _lastActorBuffs[i][buff]))
+                continue;
+            _client->sendActorBuff(CoopActorBuff{.map = engine->_currentLoadedMapId, .index = i, .buff = buff, .value = pActors[i].buffs[buff]});
+            _lastActorBuffs[i][buff] = pActors[i].buffs[buff];
+        }
+    }
+}
+
+void CoopSession::applyActorBuffs() {
+    for (const CoopActorBuff &buff : _server->takeActorBuffs())
+        if (buff.map == engine->_currentLoadedMapId && buff.index >= 0 && buff.index < std::ssize(pActors))
+            pActors[buff.index].buffs[buff.buff] = buff.value;
 }
 
 void CoopSession::sendActorHits() {

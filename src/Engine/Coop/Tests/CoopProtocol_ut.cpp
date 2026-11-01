@@ -301,6 +301,33 @@ UNIT_TEST(CoopProtocol, ClockRoundTrip) {
     EXPECT_EQ(roundTrip(clock).playingTime, Time::fromTicks(123456789));
 }
 
+UNIT_TEST(CoopProtocol, ActorBuffRoundTrip) {
+    // An actor buff keeps the player, the map, the actor, the buff and all of its fields.
+    CoopActorBuff buff;
+    buff.playerId = 1;
+    buff.map = MAP_HARMONDALE;
+    buff.index = 6;
+    buff.buff = ACTOR_BUFF_PARALYZED;
+    buff.value.expireTime = Time::fromTicks(98765);
+    buff.value.power = 12;
+    buff.value.skillMastery = MASTERY_EXPERT;
+    buff.value.overlayId = 3;
+    buff.value.caster = 2;
+    buff.value.isGM = true;
+
+    CoopActorBuff decoded = roundTrip(buff);
+    EXPECT_EQ(decoded.playerId, 1);
+    EXPECT_EQ(decoded.map, MAP_HARMONDALE);
+    EXPECT_EQ(decoded.index, 6);
+    EXPECT_EQ(decoded.buff, ACTOR_BUFF_PARALYZED);
+    EXPECT_EQ(decoded.value.expireTime, Time::fromTicks(98765));
+    EXPECT_EQ(decoded.value.power, 12);
+    EXPECT_EQ(decoded.value.skillMastery, MASTERY_EXPERT);
+    EXPECT_EQ(decoded.value.overlayId, 3);
+    EXPECT_EQ(decoded.value.caster, 2);
+    EXPECT_TRUE(decoded.value.isGM);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

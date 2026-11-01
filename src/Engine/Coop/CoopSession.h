@@ -10,7 +10,12 @@
 
 #include "Core/Time/Time.h"
 
+#include "Engine/Objects/ActorEnums.h"
+#include "Engine/Spells/SpellBuff.h"
+
 #include "Library/Geometry/Vec.h"
+
+#include "Utility/IndexedArray.h"
 
 #include "Utility/Memory/Blob.h"
 
@@ -133,6 +138,8 @@ class CoopSession {
     void syncGroundItems();
     void syncClock();
     void sendActorHits();
+    void sendActorBuffs();
+    void applyActorBuffs();
 
  private:
     std::unique_ptr<CoopServer> _server;
@@ -151,7 +158,9 @@ class CoopSession {
     std::chrono::steady_clock::time_point _lastFullActorUpdate;
     std::map<int, int> _standIns; // Player id to the index of the actor that stands in for that player's party.
     MapId _standInsMap = MAP_INVALID;
-    std::optional<Time> _lastClockSendTime; // Game time, so that the clock goes out as often in tests as in play.
+    std::optional<Time> _lastClockSendTime;
+    std::vector<IndexedArray<SpellBuff, ACTOR_BUFF_FIRST, ACTOR_BUFF_LAST>> _lastActorBuffs; // Guest, buffs as of the last frame.
+    MapId _lastActorBuffsMap = MAP_INVALID; // Game time, so that the clock goes out as often in tests as in play.
 };
 
 extern std::unique_ptr<CoopSession> coopSession;

@@ -142,6 +142,12 @@ class CoopServer {
     void sendClock(const CoopClock &clock);
 
     /**
+     * @return                          Spell effects clients' parties put on monsters since the last call, oldest
+     *                                  first.
+     */
+    [[nodiscard]] std::vector<CoopActorBuff> takeActorBuffs();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -233,4 +239,5 @@ class CoopServer {
     std::vector<CoopQuestRewards> _questRewards;
     std::vector<CoopChest> _chests;
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
+    std::vector<CoopActorBuff> _actorBuffs;
 };

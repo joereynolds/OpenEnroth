@@ -148,6 +148,15 @@ std::optional<CoopClock> CoopClient::takeClock() {
     return std::exchange(_clock, std::nullopt);
 }
 
+void CoopClient::sendActorBuff(const CoopActorBuff &buff) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    CoopActorBuff message = buff;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;

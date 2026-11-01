@@ -410,6 +410,35 @@ static void deserializeBody(InputStream &src, CoopClock *dst) {
     dst->playingTime = Time::fromTicks(fromStream<int64_t>(src));
 }
 
+static void serializeBody(const CoopActorBuff &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.map), dst);
+    serializeInt(src.index, dst);
+    serializeInt(std::to_underlying(src.buff), dst);
+    serialize(static_cast<int64_t>(src.value.expireTime.ticks()), dst);
+    serializeInt(src.value.power, dst);
+    serializeInt(std::to_underlying(src.value.skillMastery), dst);
+    serializeInt(src.value.overlayId, dst);
+    serializeInt(src.value.caster, dst);
+    serializeBool(src.value.isGM, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopActorBuff *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->index = deserializeInt(src);
+    int buff = deserializeInt(src);
+    if (buff < std::to_underlying(ACTOR_BUFF_FIRST) || buff > std::to_underlying(ACTOR_BUFF_LAST))
+        throw Exception("Unknown coop actor buff {}", buff);
+    dst->buff = static_cast<ActorBuff>(buff);
+    dst->value.expireTime = Time::fromTicks(fromStream<int64_t>(src));
+    dst->value.power = deserializeInt(src);
+    dst->value.skillMastery = static_cast<Mastery>(deserializeInt(src));
+    dst->value.overlayId = deserializeInt(src);
+    dst->value.caster = deserializeInt(src);
+    dst->value.isGM = deserializeBool(src);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {
