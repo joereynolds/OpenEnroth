@@ -6,7 +6,11 @@ Read it together with the doxygen comments in `src/Engine/Coop`, which document 
 
 ## Playing
 
-One player hosts, the others join.
+One player hosts, the others join. Press P on the main menu, or click "Co-op (P)", to open the co-op screen. Type
+your name, the host's address, the port and optionally one of your saves, then click Host or Join. Enter moves to the
+next field and Escape goes back. Hosting returns to the main menu, where you start or load a game as usual.
+
+The same can be done from the command line:
 
 ```
 OpenEnroth --host 7347 --name Alice
@@ -67,7 +71,7 @@ The code is layered like this, lowest first:
 | `CoopServer`, `CoopClient` | `src/Engine/Coop` | Connection handling, the handshake, player ids, votes, and queues of received messages. They don't touch the engine. |
 | `CoopSession` | `src/Engine/Coop/CoopSession.*` | Connects the server or client to the running game. This is where engine state is read and written. |
 | Engine hooks | `Engine.h`, `CoopEvents.h` | Plain data on `Engine` that game code fills in and the session drains. They keep the engine from depending on the co-op library. |
-| Application | `Game.cpp`, `CoopJoinState`, `OpenEnrothOptions` | Command line options, hosting from startup, the join screen, the vote prompts, and calling the session every frame. |
+| Application | `Game.cpp`, `CoopMenuState`, `CoopJoinState`, `OpenEnrothOptions` | Command line options, the co-op and join screens, the vote prompts, and calling the session every frame. |
 
 `coopSession` is a global, like the rest of the engine's world state, and it's null outside of co-op. `Game::gameLoop`
 calls `coopSession->update()` once per frame, after the world update and before drawing. In the main menu,
@@ -227,8 +231,10 @@ Things that will bite you when writing tests:
   round trip can both get it.
 * **Quest rewards** are applied to the same character slots, whoever is in them.
 * **Hirelings** don't come along when a guest joins.
-* **Disconnects:** a guest who loses the host is told so and carries on as a single player game. Rejoining needs a
-  restart with `--connect`, there's no way to join from inside the game yet.
+* **Disconnects:** a guest who loses the host is told so and carries on as a single player game. Rejoining means
+  quitting to the main menu and joining again from the co-op screen.
+* **Typing addresses:** text input only knows letters, digits and the period, so host names with a dash can't be
+  typed on the co-op screen. Use an IP address, or `--connect`.
 * **Map scripts run on leaving** only fire in the proposer's game when the group travels.
 * **Fares and travel days** spent before a travel vote starts aren't refunded when the vote fails.
 * **Map changes** while players are on different maps: chests, ground items and monsters are only synced for the map

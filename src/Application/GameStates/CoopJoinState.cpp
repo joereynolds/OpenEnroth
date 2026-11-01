@@ -28,6 +28,9 @@ FsmAction CoopJoinState::enter() {
 }
 
 FsmAction CoopJoinState::update() {
+    if (!coopSession || !coopSession->client())
+        return FsmAction::transition("failed"); // Dropped from elsewhere, e.g. the game is shutting down.
+
     CoopClient *client = coopSession->client();
     client->update();
 

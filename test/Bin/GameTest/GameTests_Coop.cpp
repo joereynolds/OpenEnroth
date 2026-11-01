@@ -1,10 +1,13 @@
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <map>
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -37,6 +40,24 @@
 
 static bool hasCoopStandIn() {
     return std::ranges::any_of(pActors, [](const Actor &actor) { return actor.attributes & ACTOR_COOP_STAND_IN; });
+}
+
+static void typeText(EngineController &game, std::string_view text) {
+    for (char c : text) {
+        if (c >= '0' && c <= '9') {
+            game.pressAndReleaseKey(static_cast<PlatformKey>(std::to_underlying(PlatformKey::KEY_DIGIT_0) + (c - '0')));
+        } else if (c >= 'a' && c <= 'z') {
+            game.pressAndReleaseKey(static_cast<PlatformKey>(std::to_underlying(PlatformKey::KEY_A) + (c - 'a')));
+        } else {
+            assert(c == '.');
+            game.pressAndReleaseKey(PlatformKey::KEY_PERIOD);
+        }
+    }
+}
+
+static void eraseText(EngineController &game, int count) {
+    for (int i = 0; i < count; i++)
+        game.pressAndReleaseKey(PlatformKey::KEY_BACKSPACE);
 }
 
 static int groundItemCount(ItemId item) {
@@ -1613,4 +1634,55 @@ GAME_TEST(Coop, GuestDropReachesHost) {
     EXPECT_EQ(dropped[0].map, MAP_EMERALD_ISLAND);
     EXPECT_EQ(dropped[0].item.itemId, ITEM_CRUDE_LONGSWORD);
     EXPECT_EQ(dropped[0].yaw, pParty->_viewYaw);
+}
+
+GAME_TEST(Coop, JoinFromCoopMenu) {
+    // The co-op screen on the main menu joins a game, without any command line options.
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    test.startTaping();
+
+    game.pressAndReleaseKey(PlatformKey::KEY_P);
+    game.tick();
+    typeText(game, "127.0.0.1"); // The address field is selected first.
+    game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
+    game.tick(); // Enter finishes the field, the next one takes input from the next frame.
+    eraseText(game, 4);
+    typeText(game, std::to_string(server.port()));
+    game.tick();
+    game.pressGuiButton("CoopMenu_Join");
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+
+    ASSERT_TRUE(coopSession);
+    EXPECT_EQ(coopSession->client()->state(), COOP_CLIENT_JOINED);
+    EXPECT_EQ(server.remoteParties().size(), 1);
+}
+
+GAME_TEST(Coop, HostFromCoopMenu) {
+    // The co-op screen on the main menu starts hosting on the port typed in, and goes back to the main menu.
+    game.startNewGame();
+    game.goToMainMenu();
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    test.startTaping();
+
+    game.pressAndReleaseKey(PlatformKey::KEY_P);
+    game.tick();
+    game.pressGuiButton("CoopMenu_Field2"); // The port.
+    game.tick();
+    eraseText(game, 4);
+    typeText(game, "47347");
+    game.tick();
+    game.pressGuiButton("CoopMenu_Host");
+    game.tick();
+
+    ASSERT_TRUE(coopSession);
+    ASSERT_TRUE(coopSession->server());
+    EXPECT_EQ(coopSession->server()->port(), 47347);
+    EXPECT_EQ(GetCurrentMenuID(), MENU_MAIN);
 }

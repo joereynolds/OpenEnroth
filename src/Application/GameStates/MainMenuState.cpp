@@ -54,6 +54,9 @@ FsmAction MainMenuState::update() {
             SetCurrentMenuID(MENU_SAVELOAD);
             transition = "loadGame";
             break;
+        case UIMSG_MainMenu_ShowCoopMenu:
+            transition = "coopMenu";
+            break;
         case UIMSG_ShowCredits:
             SetCurrentMenuID(MENU_CREDITS);
             transition = "credits";

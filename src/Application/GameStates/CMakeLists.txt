@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
 
 set(APPLICATION_GAME_STATES_SOURCES
         CoopJoinState.cpp
+        CoopMenuState.cpp
         CreditsState.cpp
         GameFsmBuilder.cpp
         LoadSlotState.cpp
@@ -12,6 +13,7 @@ set(APPLICATION_GAME_STATES_SOURCES
 
 set(APPLICATION_GAME_STATES_HEADERS
         CoopJoinState.h
+        CoopMenuState.h
         CreditsState.h
         GameFsmBuilder.h
         LoadSlotState.h

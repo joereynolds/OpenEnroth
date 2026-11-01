@@ -50,6 +50,8 @@ static char PlatformKeyToChar(PlatformKey key, PlatformModifiers mods) {
         } else {
             return std::to_underlying(key) - std::to_underlying(PlatformKey::KEY_A) + 'a';
         }
+    } else if (key == PlatformKey::KEY_PERIOD || key == PlatformKey::KEY_DECIMAL) {
+        return '.';
     }
 
     return 0;

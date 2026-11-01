@@ -13,6 +13,8 @@
 
 #include "Io/Mouse.h"
 
+static constexpr Recti COOP_LABEL_RECT(20, 450, 120, 20);
+
 GUIWindow_MainMenu::GUIWindow_MainMenu() :
     GUIWindow(WINDOW_MAIN_MENU, {0, 0}, render->GetRenderDimensions()) {
     main_menu_background = assets->getIcon("title.pcx");
@@ -30,6 +32,8 @@ GUIWindow_MainMenu::GUIWindow_MainMenu() :
                                UIMSG_ShowCredits, 2, INPUT_ACTION_SHOW_CREDITS, "", {ui_mainmenu_credits});
     pBtnExit = CreateButton("MainMenu_ExitGame", {495, 337}, ui_mainmenu_exit->size(), BUTTON_TYPE_NORMAL, 0,
                             UIMSG_ExitToWindows, 3, INPUT_ACTION_EXIT_GAME, "", {ui_mainmenu_exit});
+    CreateButton("MainMenu_Coop", COOP_LABEL_RECT.topLeft(), COOP_LABEL_RECT.size(), BUTTON_TYPE_NORMAL, 0,
+                 UIMSG_MainMenu_ShowCoopMenu, 0, INPUT_ACTION_COOP_MENU);
 }
 
 GUIWindow_MainMenu::~GUIWindow_MainMenu() {
@@ -38,6 +42,7 @@ GUIWindow_MainMenu::~GUIWindow_MainMenu() {
 
 void GUIWindow_MainMenu::Update() {
     render->DrawQuad2D(main_menu_background, {0, 0});
+    DrawText(assets->pFontCreate.get(), COOP_LABEL_RECT.topLeft(), colorTable.White, "Co-op (P)", frameRect); // OE addition, not in the original art.
 
     Pointi pt = mouse->position();
 
