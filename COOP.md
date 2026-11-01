@@ -223,8 +223,8 @@ Things that will bite you when writing tests:
   round trip can both get it.
 * **Quest rewards** are applied to the same character slots, whoever is in them.
 * **Hirelings** don't come along when a guest joins.
-* **Disconnects:** a guest who drops out has to rejoin from the main menu and loses progress since joining. There's no
-  co-op save, so the host's own saves keep the host's party only.
+* **Disconnects:** a guest who loses the host is told so and carries on as a single player game. Rejoining needs a
+  restart with `--connect`, there's no way to join from inside the game yet.
 * **Map scripts run on leaving** only fire in the proposer's game when the group travels.
 * **Fares and travel days** spent before a travel vote starts aren't refunded when the vote fails.
 * **Map changes** while players are on different maps: chests, ground items and monsters are only synced for the map

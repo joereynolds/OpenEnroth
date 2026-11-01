@@ -17,6 +17,7 @@
 #include "Engine/EngineCallObserver.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Interaction.h"
+#include "Engine/Coop/CoopClient.h"
 #include "Engine/Coop/CoopServer.h"
 #include "Engine/Coop/CoopSession.h"
 #include "Engine/Data/AwardEnums.h"
@@ -1632,7 +1633,12 @@ void Game::gameLoop() {
 
             if (coopSession) {
                 coopSession->update();
-                showCoopVote();
+                if (coopSession->client() && coopSession->client()->state() == COOP_CLIENT_FAILED) {
+                    engine->_statusBar->setEvent(fmt::format("Lost the co-op game: {}. You're playing alone now.", coopSession->client()->failureReason()));
+                    coopSession.reset();
+                } else {
+                    showCoopVote();
+                }
             }
 
             GameUI_WritePointedObjectStatusString();

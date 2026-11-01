@@ -1335,3 +1335,29 @@ GAME_TEST(Coop, HostMenusDontPauseTheWorld) {
         EXPECT_EQ(goblinPosTape.size() > 1, guestJoined);
     }
 }
+
+GAME_TEST(Coop, GuestCarriesOnAloneWhenHostLeaves) {
+    // A guest whose host goes away is told so, and goes on as a single player game, with its own monsters acting again.
+    auto statusTape = tapes.statusBar();
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    auto server = std::make_unique<CoopServer>(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server->port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server->remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server->update();
+        game.tick();
+    }
+    ASSERT_EQ(server->remoteParties().size(), 1);
+    ASSERT_TRUE(engine->_actorsFollowHost);
+    test.startTaping();
+
+    server.reset();
+    for (int i = 0; i < 100 && coopSession; i++) // The host's going away arrives over the network.
+        game.tick();
+
+    EXPECT_FALSE(coopSession);
+    EXPECT_FALSE(engine->_actorsFollowHost);
+    EXPECT_CONTAINS(statusTape, "Lost the co-op game: Disconnected from the host. You're playing alone now.");
+}
