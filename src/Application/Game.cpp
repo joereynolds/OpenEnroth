@@ -50,6 +50,7 @@
 #include "Engine/Random/Random.h"
 #include "Engine/Spells/CastSpellInfo.h"
 #include "Engine/Spells/SpellEnumFunctions.h"
+#include "Engine/Spells/Spells.h"
 #include "Engine/Timer.h"
 #include "Engine/TurnEngine/TurnEngine.h"
 #include "Engine/MapEnumFunctions.h"
@@ -1623,8 +1624,11 @@ void Game::gameLoop() {
                 if (engineFlags & ENGINE_SKIP_NEXT_WORLD_UPDATE) {
                     engineFlags &= ~ENGINE_SKIP_NEXT_WORLD_UPDATE;
                 } else {
-                    if (!engine->_actorsFollowHost)
+                    if (!engine->_actorsFollowHost) {
                         Actor::UpdateActorAI();
+                    } else if (uCurrentlyLoadedLevelType != LEVEL_INDOOR && pParty->armageddon_timer) {
+                        armageddonProgress(); // The monster AI update that drives Armageddon doesn't run on a co-op guest.
+                    }
                     UpdateUserInput_and_MapSpecificStuff();
                 }
             }

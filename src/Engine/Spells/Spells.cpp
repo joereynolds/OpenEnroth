@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 
+#include "Engine/Engine.h"
 #include "Engine/Party.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Graphics/Overlays.h"
@@ -879,6 +880,8 @@ void armageddonProgress() {
         int incomingDamage = actor.CalcMagicalDamageToActor(DAMAGE_MAGIC, outgoingDamage);
         if (incomingDamage > 0) {
             actor.hp -= incomingDamage;
+            if (engine->_actorsFollowHost)
+                engine->_actorHitsForHost.push_back(ActorHit{actor.id, incomingDamage});
 
             if (actor.hp >= 0) {
                 Actor::AI_Pain(actor.id, Pid::character(0), 0);

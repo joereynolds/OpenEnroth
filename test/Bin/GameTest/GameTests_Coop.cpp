@@ -1302,8 +1302,8 @@ GAME_TEST(Coop, GuestFollowsHostClock) {
 }
 
 GAME_TEST(Coop, HostMenusDontPauseTheWorld) {
-    // With the spellbook open, the host's monsters froze for everyone, guests included. The host's world has to keep
-    // running while a guest plays, and still pauses like in single player when nobody has joined.
+    // The host's world keeps running while the host has the spellbook open and a guest is playing, and still pauses
+    // like in single player when nobody has joined.
     for (bool guestJoined : {false, true}) {
         SCOPED_TRACE(fmt::format("guestJoined={}", guestJoined));
         test.prepareForNextTest();
@@ -1427,4 +1427,39 @@ GAME_TEST(Coop, GuestArmorHalvingReachesHost) {
     ASSERT_TRUE(halved());
     EXPECT_EQ(buffs.back().index, titan);
     EXPECT_EQ(buffs.back().value.expireTime, pActors[titan].buffs[ACTOR_BUFF_HALVED_ARMOR].expireTime);
+}
+
+GAME_TEST(Coop, GuestArmageddonHurtsHostMonsters) {
+    // Armageddon cast in a guest's game hurts the host's monsters, like any other hit from the guest.
+    engine->config->debug.NoActors.setValue(true);
+    engine->config->debug.AllMagic.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1000, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto goblinHpTape = actorTapes.hp(goblin);
+    test.startTaping();
+
+    game.castSpell(0, SPELL_DARK_ARMAGEDDON);
+    std::vector<CoopActorDamage> damage;
+    auto hitGoblin = [&] { return std::ranges::any_of(damage, [&](const CoopActorDamage &hit) { return hit.index == goblin; }); };
+    for (int i = 0; i < 200 && !hitGoblin(); i++) { // The ground shakes for a while before the blast.
+        game.tick();
+        server.update();
+        for (const CoopActorDamage &hit : server.takeActorDamage())
+            damage.push_back(hit);
+    }
+
+    ASSERT_TRUE(hitGoblin());
+    EXPECT_LT(goblinHpTape.delta(), 0);
 }

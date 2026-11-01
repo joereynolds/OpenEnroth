@@ -116,7 +116,7 @@ There are three ways something gets shared:
 |------|-----|-------|
 | Party positions | Relayed | `CoopPartyPose`, unreliable, with a heartbeat. Drawn as a chain mail Fighter by `PrepareRemotePartiesDrawList`. |
 | Monsters | Host-driven | `CoopActorStates`. Guests skip monster AI and movement (`Engine::_actorsFollowHost`), and advance animations themselves. |
-| Guest hits on monsters | Guest to host | `CoopActorDamage`. The guest works out the damage, the host subtracts it and plays the pain reaction toward the guest's stand-in. |
+| Guest hits on monsters | Guest to host | `CoopActorDamage`, from party attacks and Armageddon. The host subtracts it and turns the monster toward the guest's stand-in. |
 | Guest spell effects on monsters | Guest to host | `CoopActorBuff`. A guest compares its monsters' buffs with the last frame and sends what changed, see `sendActorBuffs`. |
 | Monster attacks on guests | Host to guest | `CoopPartyHit`. The guest's game rolls the attack against its own characters. |
 | Corpse loot | Host-driven | `CoopLootRequest` and `CoopLoot`. The host rolls the loot and sends it to the first guest who asks. |
@@ -219,7 +219,7 @@ Things that will bite you when writing tests:
 * **Waiting and taverns** aren't voted on. The host's waits move everyone's clock, a guest's waits are undone by the
   host's clock within a second.
 * **Some combat effects** a guest causes stay on the guest's copy of the monster: the stun of a staff, a mace or a
-  weapon of force, and knockback. Armageddon damage isn't forwarded either. Spell effects the host puts on monsters aren't
+  weapon of force, and knockback. Spell effects the host puts on monsters aren't
   sent to guests, so a guest draws a monster the host paralyzed as if it were moving.
 * **Chests and ground items** are relayed rather than host-driven, so two players grabbing the same item within one
   round trip can both get it.
