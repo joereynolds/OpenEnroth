@@ -60,6 +60,7 @@ CoopSession::~CoopSession() {
     engine->_questRewards.clear();
     engine->_changedChests.clear();
     engine->_takenGroundItems.clear();
+    engine->_droppedItems.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -131,6 +132,7 @@ void CoopSession::update() {
     syncQuestRewards();
     syncChests();
     syncGroundItems();
+    syncDroppedItems();
     syncClock();
 
     std::optional<CoopVoteDecision> decision = _server ? _server->takeVoteDecision() : _client->takeVoteDecision();
@@ -579,6 +581,28 @@ void CoopSession::syncClock() {
     } else if (drift < Duration() - CLOCK_TOLERANCE) {
         pParty->GetPlayingTime() = clock->playingTime;
         _494035_timed_effects__water_walking_damage__etc(Duration()); // Updates the calendar fields.
+    }
+}
+
+void CoopSession::syncDroppedItems() {
+    for (const DroppedItem &local : std::exchange(engine->_droppedItems, {})) {
+        CoopItemDropped dropped{.map = engine->_currentLoadedMapId, .item = local.item, .pos = local.pos, .yaw = local.yaw};
+        if (_server) {
+            dropped.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendItemDropped(dropped);
+        } else {
+            _client->sendItemDropped(dropped);
+        }
+    }
+
+    std::vector<CoopItemDropped> remote = _server ? _server->takeItemsDropped() : _client->takeItemsDropped();
+    for (const CoopItemDropped &dropped : remote) {
+        if (dropped.map == engine->_currentLoadedMapId) {
+            int sectorId = uCurrentlyLoadedLevelType == LEVEL_INDOOR ? pIndoor->GetSector(dropped.pos) : 0;
+            Party::dropItem(dropped.item, dropped.pos, dropped.yaw, sectorId);
+        }
+        if (_server)
+            _server->sendItemDropped(dropped);
     }
 }
 

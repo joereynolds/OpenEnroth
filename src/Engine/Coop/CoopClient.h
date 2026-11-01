@@ -162,6 +162,18 @@ class CoopClient {
     void sendActorBuff(const CoopActorBuff &buff);
 
     /**
+     * Tells the host that this client's party dropped an item. Does nothing until joined.
+     *
+     * @param dropped                   The item and how it was thrown.
+     */
+    void sendItemDropped(const CoopItemDropped &dropped);
+
+    /**
+     * @return                          Items the other players' parties dropped since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopItemDropped> takeItemsDropped();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -232,4 +244,5 @@ class CoopClient {
     std::vector<CoopChest> _chests;
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
     std::optional<CoopClock> _clock;
+    std::vector<CoopItemDropped> _itemsDropped;
 };

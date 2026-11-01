@@ -148,6 +148,18 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopActorBuff> takeActorBuffs();
 
     /**
+     * Tells every client except the one whose party dropped it that an item was dropped.
+     *
+     * @param dropped                   The item, with the id of the player whose party dropped it.
+     */
+    void sendItemDropped(const CoopItemDropped &dropped);
+
+    /**
+     * @return                          Items clients' parties dropped since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopItemDropped> takeItemsDropped();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -240,4 +252,5 @@ class CoopServer {
     std::vector<CoopChest> _chests;
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
     std::vector<CoopActorBuff> _actorBuffs;
+    std::vector<CoopItemDropped> _itemsDropped;
 };

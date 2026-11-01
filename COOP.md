@@ -124,6 +124,7 @@ There are three ways something gets shared:
 | Quest rewards | Relayed | `CoopQuestRewards`. Rewards from a script run that also changed a quest bit. |
 | Chests | Relayed | `CoopChest`, the whole chest, whenever someone changes it. |
 | Ground item pickups | Relayed | `CoopGroundItemTaken`. Matched by item kind and nearest position, since indices differ between games. |
+| Dropped items | Relayed | `CoopItemDropped`. Every game makes the same throw with `Party::dropItem`. |
 | Map changes | Voted | `COOP_VOTE_TRAVEL`. Every map change ends up in the game loop's `GAME_STATE_CHANGE_LOCATION` branch, and that's where it's turned into a vote. |
 | Rest | Voted | `COOP_VOTE_REST`. Once approved, every game opens the rest window and rests normally. |
 | Game time | Host-driven | `CoopClock`, every 30 game seconds. A guest more than a game minute off follows it, see `syncClock`. |
@@ -215,7 +216,8 @@ Things that will bite you when writing tests:
 
 ## Known gaps
 
-* **Dropped items** only appear in the dropping player's game.
+* **Dropped items:** every game runs the throw's physics on its own, so where an item lands isn't guaranteed to match
+  to the unit. Pickups are matched within a short distance to allow for that.
 * **Waiting and taverns** aren't voted on. The host's waits move everyone's clock, a guest's waits are undone by the
   host's clock within a second.
 * **Some combat effects** a guest causes stay on the guest's copy of the monster: the stun of a staff, a mace or a

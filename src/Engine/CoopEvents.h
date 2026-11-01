@@ -2,6 +2,7 @@
 
 #include "Engine/PartyEnums.h"
 #include "Engine/Evt/EvtEnums.h"
+#include "Engine/Objects/Item.h"
 #include "Engine/Objects/ItemEnums.h"
 
 #include "Library/Geometry/Vec.h"
@@ -47,4 +48,13 @@ struct QuestReward {
 struct GroundItemTaken {
     ItemId item = ITEM_NULL;
     Vec3f pos;
+};
+
+/**
+ * An item the local party dropped or threw.
+ */
+struct DroppedItem {
+    Item item;
+    Vec3f pos; // Where the throw started.
+    int yaw = 0;
 };

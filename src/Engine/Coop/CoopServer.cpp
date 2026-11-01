@@ -122,6 +122,17 @@ std::vector<CoopActorBuff> CoopServer::takeActorBuffs() {
     return std::exchange(_actorBuffs, {});
 }
 
+void CoopServer::sendItemDropped(const CoopItemDropped &dropped) {
+    Blob data = encodeCoopMessage(dropped);
+    for (const auto &[peer, client] : _clients)
+        if (client.playerId != -1 && client.playerId != dropped.playerId)
+            _net->send(peer, NET_CHANNEL_RELIABLE, data);
+}
+
+std::vector<CoopItemDropped> CoopServer::takeItemsDropped() {
+    return std::exchange(_itemsDropped, {});
+}
+
 void CoopServer::sendLoot(int playerId, const CoopLoot &loot) {
     for (const auto &[peer, client] : _clients)
         if (client.playerId == playerId)
@@ -180,6 +191,9 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopActorBuff *buff = std::get_if<CoopActorBuff>(&message)) {
         buff->playerId = _clients[peer].playerId;
         _actorBuffs.push_back(*buff);
+    } else if (CoopItemDropped *dropped = std::get_if<CoopItemDropped>(&message)) {
+        dropped->playerId = _clients[peer].playerId;
+        _itemsDropped.push_back(std::move(*dropped));
     } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
         request->playerId = _clients[peer].playerId;
         _lootRequests.push_back(std::move(*request));

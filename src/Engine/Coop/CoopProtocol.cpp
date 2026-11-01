@@ -441,6 +441,26 @@ static void deserializeBody(InputStream &src, CoopActorBuff *dst) {
     dst->value.isGM = deserializeBool(src);
 }
 
+static void serializeBody(const CoopItemDropped &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.map), dst);
+    serializeItem(src.item, dst);
+    serialize(src.pos.x, dst);
+    serialize(src.pos.y, dst);
+    serialize(src.pos.z, dst);
+    serializeInt(src.yaw, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopItemDropped *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    dst->item = deserializeItem(src);
+    deserialize(src, &dst->pos.x);
+    deserialize(src, &dst->pos.y);
+    deserialize(src, &dst->pos.z);
+    dst->yaw = deserializeInt(src);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

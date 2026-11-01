@@ -190,11 +190,20 @@ struct CoopActorBuff {
     SpellBuff value;
 };
 
+/** An item one player dropped, every game throws it the same way. Relayed like `CoopQuestBit`. */
+struct CoopItemDropped {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    Item item;
+    Vec3f pos; // Where the throw started.
+    int yaw = 0;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
                                  CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock,
-                                 CoopActorBuff>;
+                                 CoopActorBuff, CoopItemDropped>;
 
 /**
  * @param message                       Message to encode.

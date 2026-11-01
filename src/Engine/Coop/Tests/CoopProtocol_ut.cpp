@@ -330,6 +330,23 @@ UNIT_TEST(CoopProtocol, ActorBuffRoundTrip) {
     EXPECT_TRUE(decoded.value.isGM);
 }
 
+UNIT_TEST(CoopProtocol, ItemDroppedRoundTrip) {
+    // A dropped item keeps the player, the map, the item and how it was thrown.
+    CoopItemDropped dropped;
+    dropped.playerId = 2;
+    dropped.map = MAP_ERATHIA;
+    dropped.item = Item(ITEM_KEEN_LONGSWORD);
+    dropped.pos = Vec3f(1, 2, 3);
+    dropped.yaw = 512;
+
+    CoopItemDropped decoded = roundTrip(dropped);
+    EXPECT_EQ(decoded.playerId, 2);
+    EXPECT_EQ(decoded.map, MAP_ERATHIA);
+    EXPECT_EQ(decoded.item.itemId, ITEM_KEEN_LONGSWORD);
+    EXPECT_EQ(decoded.pos, Vec3f(1, 2, 3));
+    EXPECT_EQ(decoded.yaw, 512);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

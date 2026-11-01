@@ -39,6 +39,12 @@ static bool hasCoopStandIn() {
     return std::ranges::any_of(pActors, [](const Actor &actor) { return actor.attributes & ACTOR_COOP_STAND_IN; });
 }
 
+static int groundItemCount(ItemId item) {
+    return std::ranges::count_if(pSpriteObjects, [&](const SpriteObject &sprite) {
+        return sprite.uObjectDescID != 0 && sprite.containing_item.itemId == item;
+    });
+}
+
 static int remotePartyBillboardCount(const Vec3f &pos) {
     int result = 0;
     for (int i = 0; i < uNumBillboardsToDraw; i++)
@@ -1537,4 +1543,74 @@ GAME_TEST(Coop, GuestTakesOverHostSpellEffects) {
 
     EXPECT_EQ(paralyzedTape, tape(false, true));
     EXPECT_TRUE(echoed.empty());
+}
+
+GAME_TEST(Coop, DroppedItemsAreShared) {
+    // An item one guest drops lands in the host's game and is passed on to the other guests.
+    auto swordsTape = tapes.custom([] { return groundItemCount(ITEM_CRUDE_LONGSWORD); });
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient dropper("127.0.0.1", coopSession->server()->port(), "Dropper");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (dropper.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        dropper.update();
+        other.update();
+    }
+    ASSERT_EQ(dropper.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the ground before the drop.
+
+    CoopItemDropped dropped;
+    dropped.map = MAP_EMERALD_ISLAND;
+    dropped.item = Item(ITEM_CRUDE_LONGSWORD);
+    dropped.pos = pParty->pos + Vec3f(0, 0, pParty->eyeLevel);
+    dropped.yaw = pParty->_viewYaw;
+    dropper.sendItemDropped(dropped);
+    std::vector<CoopItemDropped> relayed;
+    for (int i = 0; i < 100 && relayed.empty(); i++) { // The dropper sends what it queued only when updated.
+        dropper.update();
+        game.tick();
+        other.update();
+        relayed = other.takeItemsDropped();
+    }
+
+    EXPECT_EQ(swordsTape, tape(0, 1));
+    ASSERT_EQ(relayed.size(), 1);
+    EXPECT_EQ(relayed[0].item.itemId, ITEM_CRUDE_LONGSWORD);
+}
+
+GAME_TEST(Coop, GuestDropReachesHost) {
+    // Dropping an item in a guest's game tells the host what was dropped and how it was thrown.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    test.startTaping();
+
+    pParty->setHoldingItem(Item(ITEM_CRUDE_LONGSWORD));
+    game.pressAndReleaseButton(BUTTON_LEFT, 240, 170); // A click in the viewport drops the held item.
+    game.tick();
+    std::vector<CoopItemDropped> dropped;
+    for (int i = 0; i < 100 && dropped.empty(); i++) {
+        server.update();
+        dropped = server.takeItemsDropped();
+        game.tick();
+    }
+
+    ASSERT_EQ(dropped.size(), 1);
+    EXPECT_EQ(dropped[0].map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(dropped[0].item.itemId, ITEM_CRUDE_LONGSWORD);
+    EXPECT_EQ(dropped[0].yaw, pParty->_viewYaw);
 }
