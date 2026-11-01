@@ -224,8 +224,8 @@ Things that will bite you when writing tests:
   to the unit. Pickups are matched within a short distance to allow for that.
 * **Waiting and taverns** aren't voted on. The host's waits move everyone's clock, a guest's waits are undone by the
   host's clock within a second.
-* **Spell effect strength:** guests only learn which spell effects the host's monsters are under, not how strong they
-  are, so a monster the host shrank isn't drawn smaller.
+* **Spell effect strength:** guests learn which spell effects the host's monsters are under and how much a shrink
+  shrinks them, but not the strength of other effects. None of the others change how a monster is drawn.
 * **Chests and ground items** are relayed rather than host-driven, so two players grabbing the same item within one
   round trip can both get it.
 * **Quest rewards** are applied to the same character slots, whoever is in them.

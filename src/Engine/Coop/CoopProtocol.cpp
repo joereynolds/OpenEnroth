@@ -233,6 +233,7 @@ static void serializeBody(const CoopActorStates &src, OutputStream *dst) {
         serializeDuration(actor.actionTime, dst);
         serializeDuration(actor.actionLength, dst);
         serialize(actor.activeBuffs, dst);
+        serializeInt(actor.shrinkPower, dst);
     }
 }
 
@@ -257,6 +258,7 @@ static void deserializeBody(InputStream &src, CoopActorStates *dst) {
         actor.actionTime = deserializeDuration(src);
         actor.actionLength = deserializeDuration(src);
         actor.activeBuffs = fromStream<uint32_t>(src);
+        actor.shrinkPower = deserializeInt(src);
     }
 }
 

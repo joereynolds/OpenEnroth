@@ -247,6 +247,8 @@ static CoopActorState actorState(int index, const Actor &actor) {
     for (ActorBuff buff : actor.buffs.indices())
         if (actor.buffs[buff].Active())
             result.activeBuffs |= 1u << std::to_underlying(buff);
+    if (actor.buffs[ACTOR_BUFF_SHRINK].Active())
+        result.shrinkPower = actor.buffs[ACTOR_BUFF_SHRINK].power;
     return result;
 }
 
@@ -263,7 +265,7 @@ static void becomeMonster(Actor *actor, MonsterId monster) {
 static bool sameActionAndPlace(const CoopActorState &l, const CoopActorState &r) {
     // Action time ticks every frame, clients advance it on their own.
     return l.monster == r.monster && l.pos == r.pos && l.yaw == r.yaw && l.sectorId == r.sectorId && l.hp == r.hp && l.aiState == r.aiState &&
-           l.animation == r.animation && l.actionLength == r.actionLength && l.activeBuffs == r.activeBuffs;
+           l.animation == r.animation && l.actionLength == r.actionLength && l.activeBuffs == r.activeBuffs && l.shrinkPower == r.shrinkPower;
 }
 
 void CoopSession::sendActorStates() {
@@ -332,6 +334,8 @@ void CoopSession::applyActorStates() {
                     actor.buffs[buff].Reset();
                 }
             }
+            if (actor.buffs[ACTOR_BUFF_SHRINK].Active())
+                actor.buffs[ACTOR_BUFF_SHRINK].power = state.shrinkPower;
             if (state.index < std::ssize(_lastActorBuffs))
                 _lastActorBuffs[state.index] = actor.buffs; // These changes are the host's, they mustn't go back to it.
         }

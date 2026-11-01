@@ -109,6 +109,7 @@ struct CoopActorState {
     Duration actionTime;
     Duration actionLength;
     uint32_t activeBuffs = 0; // Bit `1 << buff` for every active `ActorBuff`, guests draw paralyzed monsters frozen.
+    int shrinkPower = 0; // Power of `ACTOR_BUFF_SHRINK`, the only effect whose strength changes how a monster looks.
 };
 
 /** Host to clients, the state of the monsters on the host's map. */
