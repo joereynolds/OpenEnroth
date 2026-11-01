@@ -242,6 +242,9 @@ static CoopActorState actorState(int index, const Actor &actor) {
     result.animation = actor.currentActionAnimation;
     result.actionTime = actor.currentActionTime;
     result.actionLength = actor.currentActionLength;
+    for (ActorBuff buff : actor.buffs.indices())
+        if (actor.buffs[buff].Active())
+            result.activeBuffs |= 1u << std::to_underlying(buff);
     return result;
 }
 
@@ -258,7 +261,7 @@ static void becomeMonster(Actor *actor, MonsterId monster) {
 static bool sameActionAndPlace(const CoopActorState &l, const CoopActorState &r) {
     // Action time ticks every frame, clients advance it on their own.
     return l.monster == r.monster && l.pos == r.pos && l.yaw == r.yaw && l.sectorId == r.sectorId && l.hp == r.hp && l.aiState == r.aiState &&
-           l.animation == r.animation && l.actionLength == r.actionLength;
+           l.animation == r.animation && l.actionLength == r.actionLength && l.activeBuffs == r.activeBuffs;
 }
 
 void CoopSession::sendActorStates() {
@@ -319,6 +322,16 @@ void CoopSession::applyActorStates() {
             actor.currentActionAnimation = state.animation;
             actor.currentActionTime = state.actionTime;
             actor.currentActionLength = state.actionLength;
+            for (ActorBuff buff : actor.buffs.indices()) {
+                bool active = state.activeBuffs & (1u << std::to_underlying(buff));
+                if (active && !actor.buffs[buff].Active()) {
+                    actor.buffs[buff].Apply(pParty->GetPlayingTime() + Duration::fromHours(1), MASTERY_NOVICE, 0, 0, -1); // Lasts until the host says otherwise.
+                } else if (!active && actor.buffs[buff].Active()) {
+                    actor.buffs[buff].Reset();
+                }
+            }
+            if (state.index < std::ssize(_lastActorBuffs))
+                _lastActorBuffs[state.index] = actor.buffs; // These changes are the host's, they mustn't go back to it.
         }
     }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <variant>
@@ -107,6 +108,7 @@ struct CoopActorState {
     ActorAnimation animation = ANIM_Standing;
     Duration actionTime;
     Duration actionLength;
+    uint32_t activeBuffs = 0; // Bit `1 << buff` for every active `ActorBuff`, guests draw paralyzed monsters frozen.
 };
 
 /** Host to clients, the state of the monsters on the host's map. */

@@ -169,6 +169,7 @@ UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
     actor.animation = ANIM_Walking;
     actor.actionTime = Duration::fromTicks(12);
     actor.actionLength = Duration::fromTicks(128);
+    actor.activeBuffs = 1u << std::to_underlying(ACTOR_BUFF_PARALYZED);
     states.actors = {actor, CoopActorState()};
 
     CoopActorStates decoded = roundTrip(states);
@@ -186,6 +187,7 @@ UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
     EXPECT_EQ(first.animation, ANIM_Walking);
     EXPECT_EQ(first.actionTime, Duration::fromTicks(12));
     EXPECT_EQ(first.actionLength, Duration::fromTicks(128));
+    EXPECT_EQ(first.activeBuffs, 1u << std::to_underlying(ACTOR_BUFF_PARALYZED));
 }
 
 UNIT_TEST(CoopProtocol, ActorDamageRoundTrip) {

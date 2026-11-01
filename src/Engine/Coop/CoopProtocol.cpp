@@ -232,6 +232,7 @@ static void serializeBody(const CoopActorStates &src, OutputStream *dst) {
         serialize(std::to_underlying(actor.animation), dst);
         serializeDuration(actor.actionTime, dst);
         serializeDuration(actor.actionLength, dst);
+        serialize(actor.activeBuffs, dst);
     }
 }
 
@@ -255,6 +256,7 @@ static void deserializeBody(InputStream &src, CoopActorStates *dst) {
         actor.animation = static_cast<ActorAnimation>(fromStream<std::underlying_type_t<ActorAnimation>>(src));
         actor.actionTime = deserializeDuration(src);
         actor.actionLength = deserializeDuration(src);
+        actor.activeBuffs = fromStream<uint32_t>(src);
     }
 }
 

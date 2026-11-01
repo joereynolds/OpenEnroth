@@ -1463,3 +1463,78 @@ GAME_TEST(Coop, GuestArmageddonHurtsHostMonsters) {
     ASSERT_TRUE(hitGoblin());
     EXPECT_LT(goblinHpTape.delta(), 0);
 }
+
+GAME_TEST(Coop, HostSpellEffectsReachGuests) {
+    // A guest learns which spell effects the host's monsters are under, so that it can draw a paralyzed monster frozen.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    Actor *goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY);
+    int goblinId = goblin->id;
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+
+    pActors[goblinId].buffs[ACTOR_BUFF_PARALYZED].Apply(pParty->GetPlayingTime() + Duration::fromHours(1), MASTERY_GRANDMASTER, 0, 0, 0);
+    std::optional<CoopActorState> latest;
+    uint32_t paralyzed = 1u << std::to_underlying(ACTOR_BUFF_PARALYZED);
+    for (int i = 0; i < 100 && !(latest && (latest->activeBuffs & paralyzed)); i++) {
+        game.tick();
+        guest.update();
+        for (const CoopActorStates &states : guest.takeActorStates())
+            for (const CoopActorState &state : states.actors)
+                if (state.index == goblinId)
+                    latest = state;
+    }
+
+    ASSERT_TRUE(latest);
+    EXPECT_TRUE(latest->activeBuffs & paralyzed);
+}
+
+GAME_TEST(Coop, GuestTakesOverHostSpellEffects) {
+    // A guest's monster takes on the spell effects the host reports, without sending them back as the guest's own.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto paralyzedTape = actorTapes.hasBuff(goblin, ACTOR_BUFF_PARALYZED);
+    test.startTaping();
+    game.tick(); // Tapes the goblin before the host's state arrives.
+
+    CoopActorStates states;
+    states.map = MAP_EMERALD_ISLAND;
+    states.actorCount = pActors.size();
+    CoopActorState state;
+    state.index = goblin;
+    state.monster = MONSTER_GOBLIN_A;
+    state.pos = pActors[goblin].pos;
+    state.activeBuffs = 1u << std::to_underlying(ACTOR_BUFF_PARALYZED);
+    states.actors = {state};
+    server.sendActorStates(states);
+    std::vector<CoopActorBuff> echoed;
+    for (int i = 0; i < 20; i++) { // A fixed wait, nothing may come back.
+        server.update();
+        game.tick();
+        for (const CoopActorBuff &buff : server.takeActorBuffs())
+            echoed.push_back(buff);
+    }
+
+    EXPECT_EQ(paralyzedTape, tape(false, true));
+    EXPECT_TRUE(echoed.empty());
+}
