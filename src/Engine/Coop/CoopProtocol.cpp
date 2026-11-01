@@ -265,6 +265,10 @@ static void serializeBody(const CoopActorDamage &src, OutputStream *dst) {
     serialize(std::to_underlying(src.map), dst);
     serializeInt(src.index, dst);
     serializeInt(src.damage, dst);
+    serializeDuration(src.extraRecovery, dst);
+    serialize(src.knockback.x, dst);
+    serialize(src.knockback.y, dst);
+    serialize(src.knockback.z, dst);
 }
 
 static void deserializeBody(InputStream &src, CoopActorDamage *dst) {
@@ -272,6 +276,10 @@ static void deserializeBody(InputStream &src, CoopActorDamage *dst) {
     dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
     dst->index = deserializeInt(src);
     dst->damage = deserializeInt(src);
+    dst->extraRecovery = deserializeDuration(src);
+    deserialize(src, &dst->knockback.x);
+    deserialize(src, &dst->knockback.y);
+    deserialize(src, &dst->knockback.z);
 }
 
 static void serializeBody(const CoopPartyHit &src, OutputStream *dst) {

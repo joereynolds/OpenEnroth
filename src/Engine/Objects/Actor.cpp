@@ -3169,8 +3169,9 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
         }
     }
     pMonster->hp -= uDamageAmount;
-    if (engine->_actorsFollowHost && uDamageAmount != 0)
-        engine->_actorHitsForHost.push_back(ActorHit{static_cast<int>(uActorID_Monster), static_cast<int>(uDamageAmount)});
+    ActorHit *hostHit = nullptr; // Co-op guest, what the host's game has to deal to its copy of the monster.
+    if (engine->_actorsFollowHost && (uDamageAmount != 0 || hit_will_stun))
+        hostHit = &engine->_actorHitsForHost.emplace_back(ActorHit{static_cast<int>(uActorID_Monster), static_cast<int>(uDamageAmount)});
     if (uDamageAmount == 0 && !hit_will_stun) {
         character->playReaction(SPEECH_ATTACK_MISS);
         return 0;
@@ -3210,6 +3211,8 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
         if (!pParty->bTurnBasedModeOn)
             extraRecoveryTime = debug_combat_recovery_mul * flt_debugrecmod3 * 20_ticks;
         pMonster->monsterInfo.recoveryTime += extraRecoveryTime;
+        if (hostHit)
+            hostHit->extraRecovery += extraRecoveryTime;
         if (engine->config->settings.ShowHits.value()) {
             engine->_statusBar->setEvent(LSTR_S_STUNS_S, character->name, pMonster->GetDisplayName());
         }
@@ -3232,6 +3235,8 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
     if (knockbackValue > 10) knockbackValue = 10;
     if (supertypeForMonsterId(pMonster->monsterInfo.id) != MONSTER_SUPERTYPE_TREANT) {
         pMonster->velocity = 50 * knockbackValue * pVelocity;
+        if (hostHit)
+            hostHit->knockback = pMonster->velocity;
     }
     Actor::AddOnDamageOverlay(uActorID_Monster, 1, v61);
 

@@ -347,6 +347,9 @@ void CoopSession::applyActorDamage() {
         if (!actor.CanBeDamaged())
             continue;
         actor.hp -= damage.damage;
+        actor.monsterInfo.recoveryTime += damage.extraRecovery;
+        if (damage.knockback != Vec3f() && actor.hp > 0)
+            actor.velocity = damage.knockback;
         if (actor.hp <= 0) {
             Actor::Die(damage.index); // No experience, the guest's game gave it to the guest's party.
         } else if (auto standIn = _standIns.find(damage.playerId); standIn != _standIns.end()) {
@@ -656,7 +659,8 @@ void CoopSession::applyActorBuffs() {
 
 void CoopSession::sendActorHits() {
     for (const ActorHit &hit : std::exchange(engine->_actorHitsForHost, {}))
-        _client->sendActorDamage(CoopActorDamage{.map = engine->_currentLoadedMapId, .index = hit.actorId, .damage = hit.damage});
+        _client->sendActorDamage(CoopActorDamage{.map = engine->_currentLoadedMapId, .index = hit.actorId, .damage = hit.damage,
+                                                 .extraRecovery = hit.extraRecovery, .knockback = hit.knockback});
 }
 
 CoopPartyPose CoopSession::localPose() {

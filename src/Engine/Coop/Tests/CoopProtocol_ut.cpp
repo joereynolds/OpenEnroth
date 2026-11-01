@@ -191,18 +191,22 @@ UNIT_TEST(CoopProtocol, ActorStatesRoundTrip) {
 }
 
 UNIT_TEST(CoopProtocol, ActorDamageRoundTrip) {
-    // Actor damage keeps the player, the map, the actor and the amount.
+    // Actor damage keeps the player, the map, the actor, the amount, the stun and the knockback.
     CoopActorDamage damage;
     damage.playerId = 2;
     damage.map = MAP_DEYJA;
     damage.index = 9;
     damage.damage = 123;
+    damage.extraRecovery = Duration::fromTicks(20);
+    damage.knockback = Vec3f(-50, 25, 0);
 
     CoopActorDamage decoded = roundTrip(damage);
     EXPECT_EQ(decoded.playerId, 2);
     EXPECT_EQ(decoded.map, MAP_DEYJA);
     EXPECT_EQ(decoded.index, 9);
     EXPECT_EQ(decoded.damage, 123);
+    EXPECT_EQ(decoded.extraRecovery, Duration::fromTicks(20));
+    EXPECT_EQ(decoded.knockback, Vec3f(-50, 25, 0));
 }
 
 UNIT_TEST(CoopProtocol, PartyHitRoundTrip) {

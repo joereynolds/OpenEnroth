@@ -124,6 +124,8 @@ struct CoopActorDamage {
     MapId map = MAP_INVALID;
     int index = -1; // Index in the map's actor list.
     int damage = 0; // Already reduced by the monster's resistances.
+    Duration extraRecovery; // How much longer the monster takes to recover, a stun.
+    Vec3f knockback; // Velocity the hit gave the monster.
 };
 
 /** Host to a client, a monster on the host's map attacked the client's party. */

@@ -1686,3 +1686,69 @@ GAME_TEST(Coop, HostFromCoopMenu) {
     EXPECT_EQ(coopSession->server()->port(), 47347);
     EXPECT_EQ(GetCurrentMenuID(), MENU_MAIN);
 }
+
+GAME_TEST(Coop, GuestStunsAndKnockbackReachHost) {
+    // A stun and a knockback from a guest's hit move the host's monster the same way, not only the guest's copy.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto recoveryTape = actorTapes.custom(goblin, [](const Actor &actor) { return actor.monsterInfo.recoveryTime; });
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+    game.tick(); // Tapes the goblin before the hit.
+
+    guest.sendActorDamage(CoopActorDamage{.map = MAP_EMERALD_ISLAND, .index = goblin, .damage = 1,
+                                          .extraRecovery = Duration::fromTicks(20), .knockback = Vec3f(0, 500, 0)});
+    for (int i = 0; i < 100 && recoveryTape.size() < 2; i++) { // The guest sends what it queued only when updated.
+        guest.update();
+        game.tick();
+    }
+
+    EXPECT_EQ(recoveryTape.delta(), Duration::fromTicks(20));
+}
+
+GAME_TEST(Coop, GuestForceWeaponStunReachesHost) {
+    // Hitting a monster with a weapon of force in a guest's game sends the stun and the knockback to the host.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Item sword(ITEM_CRUDE_LONGSWORD);
+    sword.specialEnchantment = ITEM_ENCHANTMENT_OF_FORCE;
+    pParty->pCharacters[0].inventory.equip(ITEM_SLOT_MAIN_HAND, sword);
+    pParty->pCharacters[0].setSkillValue(SKILL_SWORD, CombinedSkillValue(60, MASTERY_GRANDMASTER)); // So that the swings land.
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    int titan = game.spawnMonster(pParty->pos + Vec3f(0, 300, 0), MONSTER_TITAN_A, SPAWN_DUMMY)->id;
+    test.startTaping();
+
+    std::vector<CoopActorDamage> hits;
+    for (int i = 0; i < 30 && hits.empty(); i++) {
+        game.pressAndReleaseKey(PlatformKey::KEY_A);
+        game.tick(5); // The swing lands, and the recovery passes.
+        server.update();
+        hits = server.takeActorDamage();
+    }
+
+    ASSERT_FALSE(hits.empty());
+    EXPECT_EQ(hits[0].index, titan);
+    EXPECT_GT(hits[0].extraRecovery, Duration());
+    EXPECT_NE(hits[0].knockback, Vec3f());
+}

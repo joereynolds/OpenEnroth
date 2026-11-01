@@ -5,6 +5,8 @@
 #include "Engine/Objects/Item.h"
 #include "Engine/Objects/ItemEnums.h"
 
+#include "Core/Time/Duration.h"
+
 #include "Library/Geometry/Vec.h"
 #include "Engine/Objects/ActorEnums.h"
 
@@ -14,6 +16,8 @@
 struct ActorHit {
     int actorId = -1;
     int damage = 0;
+    Duration extraRecovery; // How much longer the monster takes to recover, a stun.
+    Vec3f knockback; // Velocity the hit gave the monster.
 };
 
 /**
