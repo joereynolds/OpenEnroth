@@ -471,6 +471,22 @@ static void deserializeBody(InputStream &src, CoopItemDropped *dst) {
     dst->yaw = deserializeInt(src);
 }
 
+static void serializeBody(const CoopSpriteLaunched &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+    serialize(std::to_underlying(src.map), dst);
+    SpriteObject_MM7 snapshotSprite;
+    snapshot(src.sprite, &snapshotSprite);
+    serialize(snapshotSprite, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopSpriteLaunched *dst) {
+    dst->playerId = deserializeInt(src);
+    dst->map = static_cast<MapId>(fromStream<std::underlying_type_t<MapId>>(src));
+    SpriteObject_MM7 snapshotSprite;
+    deserialize(src, &snapshotSprite);
+    reconstruct(snapshotSprite, &dst->sprite);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {

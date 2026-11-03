@@ -14,6 +14,7 @@
 #include "Engine/Objects/Chest.h"
 #include "Engine/Objects/Item.h"
 #include "Engine/Objects/MonsterEnums.h"
+#include "Engine/Objects/SpriteObject.h"
 #include "Engine/Spells/SpellBuff.h"
 
 #include "Core/Time/Duration.h"
@@ -202,11 +203,18 @@ struct CoopItemDropped {
     int yaw = 0;
 };
 
+/** A projectile or spell effect one player's party launched. Relayed like `CoopQuestBit`, other games only draw it. */
+struct CoopSpriteLaunched {
+    int playerId = -1; // Filled in by the host, clients leave it at -1.
+    MapId map = MAP_INVALID;
+    SpriteObject sprite;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
                                  CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock,
-                                 CoopActorBuff, CoopItemDropped>;
+                                 CoopActorBuff, CoopItemDropped, CoopSpriteLaunched>;
 
 /**
  * @param message                       Message to encode.

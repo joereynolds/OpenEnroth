@@ -1602,6 +1602,8 @@ void reconstruct(const SpawnPoint_MM7 &src, SpawnPoint *dst) {
 
 void snapshot(const SpriteObject &src, SpriteObject_MM7 *dst) {
     memzero(dst);
+    if (src.isCoopRemote)
+        return; // Another co-op player's projectile is only a picture, saves get an empty slot.
 
     dst->spriteId = std::to_underlying(src.spriteId);
     dst->objectDescId = src.uObjectDescID;

@@ -174,6 +174,18 @@ class CoopClient {
     [[nodiscard]] std::vector<CoopItemDropped> takeItemsDropped();
 
     /**
+     * Tells the host that this client's party launched a projectile or spell effect. Does nothing until joined.
+     *
+     * @param launched                  The sprite as it was launched.
+     */
+    void sendSpriteLaunched(const CoopSpriteLaunched &launched);
+
+    /**
+     * @return                          Sprites the other players' parties launched since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopSpriteLaunched> takeSpritesLaunched();
+
+    /**
      * Asks the host for what's on a corpse. Does nothing until joined.
      *
      * @param request                   Which corpse to loot.
@@ -245,4 +257,5 @@ class CoopClient {
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
     std::optional<CoopClock> _clock;
     std::vector<CoopItemDropped> _itemsDropped;
+    std::vector<CoopSpriteLaunched> _spritesLaunched;
 };

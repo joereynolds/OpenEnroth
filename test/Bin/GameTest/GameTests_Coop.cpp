@@ -1870,3 +1870,91 @@ GAME_TEST(Coop, HostFireballMissesGuests) {
     EXPECT_LT(goblinHpTape.delta(), 0);
     EXPECT_FALSE(std::ranges::any_of(statusTape, [](const std::string &status) { return status.contains("Fighter"); })); // What the host's game calls the guest.
 }
+
+GAME_TEST(Coop, GuestSpellsAreDrawnOnHost) {
+    // A fire bolt a guest casts flies and explodes in the host's game, but only the guest's game deals its damage.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto goblinHpTape = actorTapes.hp(goblin);
+    auto spritesTape = tapes.sprites();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient caster("127.0.0.1", coopSession->server()->port(), "Caster");
+    CoopClient other("127.0.0.1", coopSession->server()->port(), "Other");
+    for (int i = 0; i < 100 && (caster.state() == COOP_CLIENT_CONNECTING || other.state() == COOP_CLIENT_CONNECTING); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        caster.update();
+        other.update();
+    }
+    ASSERT_EQ(caster.state(), COOP_CLIENT_JOINED);
+    ASSERT_EQ(other.state(), COOP_CLIENT_JOINED);
+    Vec3f casterPos = pParty->pos + Vec3f(0, 500, 0);
+    caster.sendLocalPose(CoopPartyPose{.map = MAP_EMERALD_ISLAND, .pos = casterPos});
+    for (int i = 0; i < 100 && !hasCoopStandIn(); i++) {
+        caster.update();
+        game.tick();
+    }
+    ASSERT_TRUE(hasCoopStandIn());
+    test.startTaping();
+
+    CoopSpriteLaunched launched;
+    launched.map = MAP_EMERALD_ISLAND;
+    launched.sprite.spriteId = SPRITE_SPELL_FIRE_FIRE_BOLT;
+    launched.sprite.uSpellID = SPELL_FIRE_FIRE_BOLT;
+    launched.sprite.spell_level = 10;
+    launched.sprite.spell_skill = MASTERY_MASTER;
+    launched.sprite.spell_caster_pid = Pid::character(0);
+    launched.sprite.vPosition = casterPos + Vec3f(0, 0, pParty->eyeLevel);
+    launched.sprite.vVelocity = Vec3f(0, 1000, 0);
+    launched.sprite.uFacing = 512;
+    caster.sendSpriteLaunched(launched);
+    std::vector<CoopSpriteLaunched> relayed;
+    for (int i = 0; i < 100 && !hasSprite(SPRITE_SPELL_FIRE_FIRE_BOLT_IMPACT); i++) { // The caster sends what it queued only when updated.
+        caster.update();
+        game.tick();
+        other.update();
+        for (const CoopSpriteLaunched &sprite : other.takeSpritesLaunched())
+            relayed.push_back(sprite);
+    }
+
+    EXPECT_CONTAINS(spritesTape.flatten(), SPRITE_SPELL_FIRE_FIRE_BOLT);
+    EXPECT_CONTAINS(spritesTape.flatten(), SPRITE_SPELL_FIRE_FIRE_BOLT_IMPACT);
+    EXPECT_EQ(goblinHpTape.delta(), 0);
+    ASSERT_EQ(relayed.size(), 1);
+    EXPECT_EQ(relayed[0].sprite.spriteId, SPRITE_SPELL_FIRE_FIRE_BOLT);
+}
+
+GAME_TEST(Coop, GuestSpellsReachHost) {
+    // A fire bolt cast in a guest's game is sent to the host, so that everyone sees it.
+    engine->config->debug.NoActors.setValue(true);
+    engine->config->debug.AllMagic.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    test.startTaping();
+
+    game.castQuickSpell(0, SPELL_FIRE_FIRE_BOLT);
+    std::vector<CoopSpriteLaunched> launched;
+    for (int i = 0; i < 100 && launched.empty(); i++) {
+        server.update();
+        launched = server.takeSpritesLaunched();
+        game.tick();
+    }
+
+    ASSERT_EQ(launched.size(), 1);
+    EXPECT_EQ(launched[0].map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(launched[0].sprite.spriteId, SPRITE_SPELL_FIRE_FIRE_BOLT);
+    EXPECT_EQ(launched[0].sprite.spell_caster_pid, Pid::character(0));
+}

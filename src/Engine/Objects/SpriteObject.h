@@ -88,6 +88,7 @@ struct SpriteObject {
     Vec3f initialPosition;
     Duration _lastParticleTime;
     Duration _ticksPerParticle = 2_ticks; // how many ticks between particles
+    bool isCoopRemote = false; // Another co-op player's projectile, only drawn, the caster's game deals its impact.
 };
 
 /**

@@ -13,6 +13,7 @@
 #include "Engine/CoopEvents.h"
 #include "Engine/PartyPlacement.h"
 #include "Engine/RemoteParty.h"
+#include "Engine/Objects/SpriteObject.h"
 #include "Engine/mm7_data.h"
 
 #include "Core/Time/Time.h"
@@ -165,6 +166,7 @@ class Engine {
     std::vector<int> _changedChests; // Co-op, chests on the current map whose contents the local party changed.
     std::vector<GroundItemTaken> _takenGroundItems; // Co-op, items the local party picked up from the ground.
     std::vector<DroppedItem> _droppedItems; // Co-op, items the local party dropped.
+    std::vector<SpriteObject> _launchedSprites; // Co-op, projectiles and spell effects the local party launched.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

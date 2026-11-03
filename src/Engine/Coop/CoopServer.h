@@ -160,6 +160,18 @@ class CoopServer {
     [[nodiscard]] std::vector<CoopItemDropped> takeItemsDropped();
 
     /**
+     * Tells every client except the one whose party launched it that a projectile or spell effect was launched.
+     *
+     * @param launched                  The sprite, with the id of the player whose party launched it.
+     */
+    void sendSpriteLaunched(const CoopSpriteLaunched &launched);
+
+    /**
+     * @return                          Sprites clients' parties launched since the last call, oldest first.
+     */
+    [[nodiscard]] std::vector<CoopSpriteLaunched> takeSpritesLaunched();
+
+    /**
      * Gives a client what its party found on a corpse. Does nothing if the player has left.
      *
      * @param playerId                  Player whose party looted the corpse.
@@ -253,4 +265,5 @@ class CoopServer {
     std::vector<CoopGroundItemTaken> _groundItemsTaken;
     std::vector<CoopActorBuff> _actorBuffs;
     std::vector<CoopItemDropped> _itemsDropped;
+    std::vector<CoopSpriteLaunched> _spritesLaunched;
 };

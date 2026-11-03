@@ -22,6 +22,7 @@
 #include "Engine/Objects/MonsterEnumFunctions.h"
 #include "Engine/Objects/Monsters.h"
 #include "Engine/Tables/MapTable.h"
+#include "Engine/Tables/ObjectTable.h"
 #include "Engine/Tables/QuestTable.h"
 
 #include "GUI/GUIWindow.h"
@@ -29,6 +30,8 @@
 #include "GUI/UI/UIGame.h"
 #include "GUI/UI/UIRest.h"
 #include "GUI/UI/UIStatusBar.h"
+
+#include "Media/Audio/AudioPlayer.h"
 
 #include "Utility/String/Format.h"
 
@@ -61,6 +64,7 @@ CoopSession::~CoopSession() {
     engine->_changedChests.clear();
     engine->_takenGroundItems.clear();
     engine->_droppedItems.clear();
+    engine->_launchedSprites.clear();
 }
 
 std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
@@ -133,6 +137,7 @@ void CoopSession::update() {
     syncChests();
     syncGroundItems();
     syncDroppedItems();
+    syncLaunchedSprites();
     syncClock();
 
     std::optional<CoopVoteDecision> decision = _server ? _server->takeVoteDecision() : _client->takeVoteDecision();
@@ -610,6 +615,40 @@ void CoopSession::syncDroppedItems() {
         }
         if (_server)
             _server->sendItemDropped(dropped);
+    }
+}
+
+void CoopSession::syncLaunchedSprites() {
+    for (const SpriteObject &local : std::exchange(engine->_launchedSprites, {})) {
+        CoopSpriteLaunched launched{.map = engine->_currentLoadedMapId, .sprite = local};
+        if (_server) {
+            launched.playerId = CoopServer::HOST_PLAYER_ID;
+            _server->sendSpriteLaunched(launched);
+        } else {
+            _client->sendSpriteLaunched(launched);
+        }
+    }
+
+    std::vector<SpellId> soundsPlayed; // A spray of sprites makes one sound in the caster's game too.
+    std::vector<CoopSpriteLaunched> remote = _server ? _server->takeSpritesLaunched() : _client->takeSpritesLaunched();
+    for (const CoopSpriteLaunched &launched : remote) {
+        if (_server)
+            _server->sendSpriteLaunched(launched);
+        if (launched.map != engine->_currentLoadedMapId)
+            continue;
+
+        SpriteObject sprite = launched.sprite;
+        sprite.uObjectDescID = pObjectTable->ObjectIDByItemID(sprite.spriteId);
+        sprite.isCoopRemote = true;
+        int slot = sprite.Create(0, 0, 0, 0);
+        if (slot == -1)
+            continue;
+        pSpriteObjects[slot].vVelocity = launched.sprite.vVelocity; // Create only knows to launch at a yaw and pitch.
+
+        if (!std::ranges::contains(soundsPlayed, sprite.uSpellID)) {
+            pAudioPlayer->playSpellSound(sprite.uSpellID, false, SOUND_MODE_PID, Pid(OBJECT_Sprite, slot));
+            soundsPlayed.push_back(sprite.uSpellID);
+        }
     }
 }
 

@@ -170,6 +170,19 @@ std::vector<CoopItemDropped> CoopClient::takeItemsDropped() {
     return std::exchange(_itemsDropped, {});
 }
 
+void CoopClient::sendSpriteLaunched(const CoopSpriteLaunched &launched) {
+    if (_state != COOP_CLIENT_JOINED)
+        return;
+
+    CoopSpriteLaunched message = launched;
+    message.playerId = -1;
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(message));
+}
+
+std::vector<CoopSpriteLaunched> CoopClient::takeSpritesLaunched() {
+    return std::exchange(_spritesLaunched, {});
+}
+
 void CoopClient::sendLootRequest(const CoopLootRequest &request) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -222,6 +235,8 @@ void CoopClient::handleMessage(CoopMessage message) {
         _clock = *clock;
     } else if (CoopItemDropped *dropped = std::get_if<CoopItemDropped>(&message)) {
         _itemsDropped.push_back(std::move(*dropped));
+    } else if (CoopSpriteLaunched *launched = std::get_if<CoopSpriteLaunched>(&message)) {
+        _spritesLaunched.push_back(std::move(*launched));
     } else if (CoopLoot *loot = std::get_if<CoopLoot>(&message)) {
         _loot.push_back(std::move(*loot));
     } else if (const CoopPartyHit *hit = std::get_if<CoopPartyHit>(&message)) {

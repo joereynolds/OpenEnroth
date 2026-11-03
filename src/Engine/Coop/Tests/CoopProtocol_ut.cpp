@@ -353,6 +353,33 @@ UNIT_TEST(CoopProtocol, ItemDroppedRoundTrip) {
     EXPECT_EQ(decoded.yaw, 512);
 }
 
+UNIT_TEST(CoopProtocol, SpriteLaunchedRoundTrip) {
+    // A launched sprite keeps the player, the map, and what flies where.
+    CoopSpriteLaunched launched;
+    launched.playerId = 2;
+    launched.map = MAP_ERATHIA;
+    launched.sprite.spriteId = SPRITE_SPELL_FIRE_FIRE_BOLT;
+    launched.sprite.uSpellID = SPELL_FIRE_FIRE_BOLT;
+    launched.sprite.spell_level = 10;
+    launched.sprite.spell_skill = MASTERY_MASTER;
+    launched.sprite.spell_caster_pid = Pid::character(1);
+    launched.sprite.vPosition = Vec3f(1, 2, 3);
+    launched.sprite.vVelocity = Vec3f(0, 1000, -10);
+    launched.sprite.uFacing = 512;
+
+    CoopSpriteLaunched decoded = roundTrip(launched);
+    EXPECT_EQ(decoded.playerId, 2);
+    EXPECT_EQ(decoded.map, MAP_ERATHIA);
+    EXPECT_EQ(decoded.sprite.spriteId, SPRITE_SPELL_FIRE_FIRE_BOLT);
+    EXPECT_EQ(decoded.sprite.uSpellID, SPELL_FIRE_FIRE_BOLT);
+    EXPECT_EQ(decoded.sprite.spell_level, 10);
+    EXPECT_EQ(decoded.sprite.spell_skill, MASTERY_MASTER);
+    EXPECT_EQ(decoded.sprite.spell_caster_pid, Pid::character(1));
+    EXPECT_EQ(decoded.sprite.vPosition, Vec3f(1, 2, 3));
+    EXPECT_EQ(decoded.sprite.vVelocity, Vec3f(0, 1000, -10));
+    EXPECT_EQ(decoded.sprite.uFacing, 512);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

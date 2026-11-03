@@ -137,6 +137,7 @@ class CoopSession {
     void syncChests();
     void syncGroundItems();
     void syncDroppedItems();
+    void syncLaunchedSprites();
     void syncClock();
     void sendActorHits();
     void sendActorBuffs();
