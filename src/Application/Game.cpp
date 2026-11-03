@@ -148,7 +148,7 @@ int Game::run() {
             Blob guestSave;
             if (!_coopOptions.partySave.empty())
                 guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", _coopOptions.partySave)));
-            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName, std::move(guestSave));
+            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName, std::move(guestSave), _coopOptions.partySave);
         } catch (const std::exception &e) {
             MM_ERROR("Could not join co-op game at '{}:{}': {}", _coopOptions.joinAddress, _coopOptions.joinPort, e.what());
         }
@@ -1560,6 +1560,8 @@ void Game::gameLoop() {
         uGameState = GAME_STATE_PLAYING;
         assert(!engine->_pendingLoadFileName.empty());
         loadGame(std::exchange(engine->_pendingLoadFileName, {}));
+        if (coopSession && coopSession->client())
+            engine->_lastLoadedSaveFileName = coopSession->guestSaveFileName(); // What the save menu pre-selects.
     }
 
     extern bool use_music_folder;

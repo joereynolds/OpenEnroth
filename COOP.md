@@ -28,8 +28,9 @@ OpenEnroth --connect 192.168.1.10 --name Bob --party save000.mm7
 
 To carry progress between sessions, every player saves their own game as usual. A guest's save holds the guest's own
 characters, so rejoining later with `--party` and that save brings their progress along. The host's save holds the
-world and the host's party, so the host loads it and hosts again. A guest should save to a slot of their own, joining
-overwrites `saves/coop.mm7`. This workflow follows from how joining works, but no test covers it end to end.
+world and the host's party, so the host loads it and hosts again. Joining writes the host's world to `saves/coop.mm7`
+and loads it, so the save menu pre-selects the save the guest brought their party from instead. Saving as usual then
+updates it. A guest without a party save gets a new slot. `Coop.GuestProgressSurvivesRejoining` plays this through.
 
 The host needs UDP port 7347 open. For two copies on one machine, give the guest its own folder with `--user-path`, so
 the two games don't share saves and settings.

@@ -27,6 +27,7 @@
 #include "Engine/Objects/Character.h"
 #include "Engine/Objects/Chest.h"
 #include "Engine/Objects/SpriteObject.h"
+#include "Engine/Resources/EngineFileSystem.h"
 
 #include "GUI/GUIButton.h"
 #include "GUI/GUIWindow.h"
@@ -75,6 +76,27 @@ static bool hasGuiButton(std::string_view id) {
     return std::ranges::any_of(lWindowList, [&](GUIWindow *window) {
         return std::ranges::any_of(window->vButtons, [&](GUIButton *button) { return button->id == id; });
     });
+}
+
+static void joinFromCoopMenu(EngineController &game, CoopServer &server, std::string_view partySave) {
+    game.pressGuiButton("MainMenu_Coop");
+    game.tick();
+    game.pressGuiButton("CoopMenu_JoinPage");
+    game.tick();
+    typeText(game, "127.0.0.1"); // The address field is selected first.
+    game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
+    game.tick(); // Enter finishes the field, the next one takes input from the next frame.
+    eraseText(game, 4);
+    typeText(game, std::to_string(server.port()));
+    game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
+    game.tick();
+    typeText(game, partySave);
+    game.tick();
+    game.pressGuiButton("CoopMenu_Join");
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
 }
 
 static int remotePartyBillboardCount(const Vec3f &pos) {
@@ -2065,4 +2087,52 @@ GAME_TEST(Coop, MultiplayerButtonOpensCoopMenu) {
     EXPECT_EQ(joinFormTape, tape(false, true, false));
     EXPECT_EQ(mainMenuTape, tape(false, true));
     EXPECT_FALSE(coopSession);
+}
+
+GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
+    // A guest who saves, quits and joins again another day gets back their own party with what it found, in the
+    // host's world with the quests the two of them did.
+    auto nameTape = tapes.custom([] { return pParty->pCharacters[0].name; });
+    auto goldTape = tapes.gold();
+    auto keyTape = tapes.totalItemCount(ITEM_COLONY_ZOD_KEY);
+    auto rolandTape = tapes.questBit(QBIT_TALKED_TO_ROLAND);
+    game.startNewGame();
+    pParty->pCharacters[0].name = "Guestina";
+    pParty->SetGold(1234);
+    ufs->write("saves/save000.mm7", createSaveData(false, "Guest").second); // The guest's own game from before.
+    game.teleportTo(MAP_COLONY_ZOD, Vec3f(-10986, 8576, 1728), 180); // On the ledge east of Roland's cage, facing it.
+    pParty->pCharacters[0].name = "Hostina";
+    pParty->SetGold(5);
+    Blob hostSave = createSaveData(false, "Host").second;
+    pParty->_questBits.set(QBIT_TALKED_TO_ROLAND, true);
+    Blob hostSaveAfterwards = createSaveData(false, "Host").second; // The host saved too, with the quest the guest did.
+    game.goToMainMenu();
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    test.startTaping();
+
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    joinFromCoopMenu(game, server, "save000.mm7");
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    game.pointMouseAtDecoration(1); // Roland's cage.
+    game.pressAndReleaseButton(BUTTON_LEFT);
+    game.tick(3);
+    game.goToGame(); // Closes Roland's dialogue.
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE);
+    game.tick(2);
+    game.pressGuiButton("GameMenu_SaveGame");
+    game.tick(2);
+    game.pressGuiButton("SaveMenu_Save");
+    game.tick(10);
+    game.goToMainMenu();
+    coopSession.reset(); // The guest quits the game.
+
+    CoopServer laterServer(0, 4, [&] { return Blob::share(hostSaveAfterwards); });
+    joinFromCoopMenu(game, laterServer, "save000.mm7");
+    ASSERT_EQ(laterServer.remoteParties().size(), 1);
+
+    EXPECT_EQ(nameTape.back(), "Guestina");
+    EXPECT_EQ(goldTape.back(), 1234);
+    EXPECT_EQ(keyTape.back(), 1);
+    EXPECT_EQ(rolandTape.back(), true);
+    EXPECT_EQ(engine->_currentLoadedMapId, MAP_COLONY_ZOD);
 }

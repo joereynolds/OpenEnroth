@@ -310,7 +310,7 @@ bool CoopMenuState::join() {
         if (!party.empty())
             guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", party)));
         coopSession.reset();
-        coopSession = CoopSession::join(address, *port, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)], std::move(guestSave));
+        coopSession = CoopSession::join(address, *port, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)], std::move(guestSave), party);
     } catch (const std::exception &e) {
         _window->error = e.what();
         return false;

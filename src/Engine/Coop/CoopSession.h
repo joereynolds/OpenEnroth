@@ -47,12 +47,21 @@ class CoopSession {
      * @param playerName                Name to show to the other players.
      * @param guestSave                 One of the guest's own saves, its party joins the host's world. Empty to
      *                                  play with a copy of the host's party.
+     * @param guestSaveFileName         File name of `guestSave` in the `saves` folder, empty if it isn't from there.
      * @return                          Client session that has started connecting. Drive `client()` until it has
      *                                  joined, then load the save it received before calling `update`.
      * @throws Exception                If the address couldn't be resolved.
      */
     [[nodiscard]] static std::unique_ptr<CoopSession> join(std::string_view address, int port, std::string_view playerName,
-                                                           Blob guestSave);
+                                                           Blob guestSave, std::string_view guestSaveFileName = {});
+
+    /**
+     * @return                          File name of the save the guest brought its party from, empty if there's none.
+     *                                  Saving the game should go there, the joined world is replaced on every join.
+     */
+    [[nodiscard]] const std::string &guestSaveFileName() const {
+        return _guestSaveFileName;
+    }
 
     /**
      * @return                          Server of a host session, `nullptr` for a client session.
@@ -150,6 +159,7 @@ class CoopSession {
     int _joinPort = 0;
     std::string _playerName;
     Blob _guestSave;
+    std::string _guestSaveFileName;
     std::optional<Vec3f> _lastFramePos;
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;

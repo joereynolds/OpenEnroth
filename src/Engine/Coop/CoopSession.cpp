@@ -77,13 +77,15 @@ std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
     return result;
 }
 
-std::unique_ptr<CoopSession> CoopSession::join(std::string_view address, int port, std::string_view playerName, Blob guestSave) {
+std::unique_ptr<CoopSession> CoopSession::join(std::string_view address, int port, std::string_view playerName, Blob guestSave,
+                                               std::string_view guestSaveFileName) {
     std::unique_ptr<CoopSession> result(new CoopSession());
     result->_client = std::make_unique<CoopClient>(address, port, playerName);
     result->_joinAddress = address;
     result->_joinPort = port;
     result->_playerName = playerName;
     result->_guestSave = std::move(guestSave);
+    result->_guestSaveFileName = guestSaveFileName;
     return result;
 }
 
