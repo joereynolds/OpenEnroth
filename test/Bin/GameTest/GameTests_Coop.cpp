@@ -66,6 +66,10 @@ static int groundItemCount(ItemId item) {
     });
 }
 
+static bool hasSprite(SpriteId sprite) {
+    return std::ranges::any_of(pSpriteObjects, [&](const SpriteObject &object) { return object.uObjectDescID != 0 && object.spriteId == sprite; });
+}
+
 static int remotePartyBillboardCount(const Vec3f &pos) {
     int result = 0;
     for (int i = 0; i < uNumBillboardsToDraw; i++)
@@ -1799,4 +1803,70 @@ GAME_TEST(Coop, GuestDrawsHostShrinkPower) {
 
     EXPECT_EQ(powerTape, tape(0, 3));
     EXPECT_TRUE(echoed.empty());
+}
+
+GAME_TEST(Coop, HostSpellsFlyThroughGuests) {
+    // A fire bolt the host casts flies through a guest standing in its way and hits the monster behind the guest.
+    engine->config->debug.NoActors.setValue(true);
+    engine->config->debug.AllMagic.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto goblinHpTape = actorTapes.hp(goblin);
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    guest.sendLocalPose(CoopPartyPose{.map = MAP_EMERALD_ISLAND, .pos = pParty->pos + Vec3f(0, 500, 0)});
+    for (int i = 0; i < 100 && !hasCoopStandIn(); i++) {
+        guest.update();
+        game.tick();
+    }
+    ASSERT_TRUE(hasCoopStandIn());
+    test.startTaping();
+
+    game.castQuickSpell(0, SPELL_FIRE_FIRE_BOLT);
+    for (int i = 0; i < 100 && !hasSprite(SPRITE_SPELL_FIRE_FIRE_BOLT_IMPACT); i++)
+        game.tick();
+
+    EXPECT_LT(goblinHpTape.delta(), 0);
+}
+
+GAME_TEST(Coop, HostFireballMissesGuests) {
+    // A fireball the host lands next to a guest hits the monster but not the guest, who isn't a monster to the host.
+    engine->config->debug.NoActors.setValue(true);
+    engine->config->debug.AllMagic.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    int goblin = game.spawnMonster(pParty->pos + Vec3f(0, 1500, 0), MONSTER_GOBLIN_A, SPAWN_DUMMY)->id;
+    auto goblinHpTape = actorTapes.hp(goblin);
+    auto statusTape = tapes.statusBar();
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    guest.sendLocalPose(CoopPartyPose{.map = MAP_EMERALD_ISLAND, .pos = pActors[goblin].pos + Vec3f(100, 0, 0)});
+    for (int i = 0; i < 100 && !hasCoopStandIn(); i++) {
+        guest.update();
+        game.tick();
+    }
+    ASSERT_TRUE(hasCoopStandIn());
+    test.startTaping();
+
+    game.castQuickSpell(0, SPELL_FIRE_FIREBALL);
+    for (int i = 0; i < 100 && !hasSprite(SPRITE_SPELL_FIRE_FIREBALL_IMPACT); i++)
+        game.tick();
+
+    EXPECT_LT(goblinHpTape.delta(), 0);
+    EXPECT_FALSE(std::ranges::any_of(statusTape, [](const std::string &status) { return status.contains("Fighter"); })); // What the host's game calls the guest.
 }

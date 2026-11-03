@@ -156,6 +156,7 @@ the host keeps a hidden actor for every guest's party on its map, marked with `A
 * `Actor::_SelectTarget` picks it by the same rules as the local party (`Actor::partyDetectionRange`).
 * The AI list builders count distance to the nearest party, local or stand-in, so monsters near a guest get to act.
 * `Actor::ActorDamageFromMonster` records an attack on a stand-in in `Engine::_standInHits` instead of dealing it.
+* A party's projectiles fly through it and a party's hits don't hurt it.
 * A stand-in is never processed by the AI and never drawn. Guests get it as removed, and saves get it as a removed
   actor, so saves stay plain MM7.
 

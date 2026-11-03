@@ -256,6 +256,8 @@ void SpriteObject::updateObjectODM(unsigned int uLayingItemID) {
             // TODO(captainurist): projectiles can fly right through small actors - an ice bolt aimed at a peasant
             //                     ~250 units away missed it and hit a titan further along the flight path.
             for (int j = 0; j < pActors.size(); ++j) {
+                if (casterType == OBJECT_Character && (pActors[j].attributes & ACTOR_COOP_STAND_IN))
+                    continue; // Another co-op player's party, flown through like the caster's own.
                 CollideWithActor(j, 0);
             }
         }
@@ -394,6 +396,9 @@ LABEL_25:
                 }
 
                 for (int actloop = 0; actloop < (signed int)pActors.size(); ++actloop) {
+                    if (pSpriteObject->spell_caster_pid.type() == OBJECT_Character && (pActors[actloop].attributes & ACTOR_COOP_STAND_IN))
+                        continue; // Another co-op player's party, flown through like the caster's own.
+
                     // dont collide against self monster type
                     if (pSpriteObject->spell_caster_pid.type() == OBJECT_Actor) {
                         if (pActors[pSpriteObject->spell_caster_pid.id()].monsterInfo.id == pActors[actloop].monsterInfo.id) {

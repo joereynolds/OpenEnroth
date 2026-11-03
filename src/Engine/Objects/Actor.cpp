@@ -2995,6 +2995,7 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
     Character *character = &pParty->pCharacters[a1.id()];
     pMonster = &pActors[uActorID_Monster];
     if (pMonster->IsNotAlive()) return 0;
+    if (pMonster->attributes & ACTOR_COOP_STAND_IN) return 0; // Another co-op player's party, parties don't hurt each other.
 
     pMonster->attributes |= ACTOR_NEARBY | ACTOR_ACTIVE;
     if (pMonster->aiState == Fleeing) pMonster->attributes |= ACTOR_FLEEING;
