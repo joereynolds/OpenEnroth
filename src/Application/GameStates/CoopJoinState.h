@@ -8,6 +8,8 @@
 
 class GraphicsImage;
 
+constexpr std::string_view COOP_JOINED_SAVE_FILE_NAME = "coop.mm7"; // The host's world as a guest joined it, replaced on every join.
+
 /**
  * Waits for the co-op client in `coopSession` to join, then exits into the game with the host's save. Keeps trying
  * for a while if the host isn't reachable or isn't in a game yet. Shows the reason and goes back to the main menu if

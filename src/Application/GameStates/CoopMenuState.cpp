@@ -11,6 +11,7 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
 #include <algorithm>
 
 #include "Engine/AssetsManager.h"
@@ -27,11 +28,14 @@
 #include "GUI/GUIMessageQueue.h"
 #include "GUI/GUIWindow.h"
 #include "GUI/UI/UIPopup.h"
+#include "GUI/UI/UISaveLoad.h"
 
 #include "Io/KeyboardInputHandler.h"
 #include "Io/Mouse.h"
 
 #include "Utility/String/Format.h"
+
+#include "CoopJoinState.h"
 
 enum class CoopMenuField {
     COOP_MENU_FIELD_NAME = 0,
@@ -53,7 +57,8 @@ using enum CoopMenuPage;
 
 static constexpr int FIELD_COUNT = 4;
 static constexpr int FIELD_MAX_LENGTH = 40;
-static constexpr std::array<const char *, FIELD_COUNT> FIELD_LABELS = {"Your name", "Host address", "Port", "Your party save"};
+static constexpr std::array<const char *, FIELD_COUNT> FIELD_LABELS = {"Your name", "Host address", "Port", "Your party"};
+static constexpr char HOST_PARTY_COPY_TEXT[] = "Copy of the host's party";
 
 static constexpr int PANEL_X = 120;
 static constexpr int PANEL_Y = 110;
@@ -94,6 +99,12 @@ class GUIWindow_CoopMenu : public GUIWindow {
         page = newPage;
         error.clear();
         DeleteButtons();
+        if (page == COOP_MENU_PAGE_JOIN) {
+            partySaves = loadMenuSlots();
+            std::erase_if(partySaves, [](const SavegameSlot &slot) { return slot.fileName == COOP_JOINED_SAVE_FILE_NAME; });
+            if (!std::ranges::contains(partySaves, fields[std::to_underlying(COOP_MENU_FIELD_PARTY)], &SavegameSlot::fileName))
+                fields[std::to_underlying(COOP_MENU_FIELD_PARTY)].clear();
+        }
         if (page == COOP_MENU_PAGE_CHOOSE) {
             CreateButton("CoopMenu_HostPage", {PANEL_X + 20, rowY(0)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowHostPage, 0);
             CreateButton("CoopMenu_JoinPage", {PANEL_X + 20, rowY(1)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowJoinPage, 0);
@@ -146,8 +157,8 @@ class GUIWindow_CoopMenu : public GUIWindow {
             drawFields(font);
             drawButton("CoopMenu_Join", "Join");
             drawButton("CoopMenu_Back", "Back");
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Leave the party save empty to play a copy", frameRect);
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, "of the host's party.", frameRect);
+            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Click Your party to bring one of your saves.", frameRect);
+            DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, "Saving as usual keeps your progress in it.", frameRect);
             break;
         }
 
@@ -155,7 +166,21 @@ class GUIWindow_CoopMenu : public GUIWindow {
             DrawText(font, {PANEL_X, buttonsY() + 3 * ROW_H}, colorTable.Red, error, frameRect);
     }
 
-    std::array<std::string, FIELD_COUNT> fields = {"Player", "", fmt::format("{}", COOP_DEFAULT_PORT), ""};
+    /**
+     * Selects the next of the guest's saves to bring a party from, after the last one a copy of the host's party.
+     */
+    void chooseNextPartySave() {
+        std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
+        auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
+        if (pos == partySaves.end()) {
+            party = partySaves.empty() ? std::string() : partySaves.front().fileName;
+        } else {
+            ++pos;
+            party = pos == partySaves.end() ? std::string() : pos->fileName;
+        }
+    }
+
+    std::array<std::string, FIELD_COUNT> fields = {"Player", "", fmt::format("{}", COOP_DEFAULT_PORT), ""}; // The party is a file name in `saves`.
     CoopMenuPage page = COOP_MENU_PAGE_CHOOSE;
     int selected = -1; // Field being typed into, -1 on the choice page.
     std::string error;
@@ -167,9 +192,15 @@ class GUIWindow_CoopMenu : public GUIWindow {
             int field = shown[i];
             Color color = field == selected ? colorTable.LaserLemon : colorTable.White;
             DrawText(font, {PANEL_X, rowY(i)}, color, FIELD_LABELS[field], frameRect);
-            std::string value = fields[field] + (field == selected ? "_" : "");
+            std::string value = field == std::to_underlying(COOP_MENU_FIELD_PARTY) ? partyName() : fields[field] + (field == selected ? "_" : "");
             DrawText(font, {VALUE_X, rowY(i)}, color, value, frameRect);
         }
+    }
+
+    std::string partyName() const {
+        const std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
+        auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
+        return pos == partySaves.end() ? HOST_PARTY_COPY_TEXT : pos->header.name;
     }
 
     GUIButton *findButton(std::string_view id) {
@@ -186,6 +217,7 @@ class GUIWindow_CoopMenu : public GUIWindow {
         return PANEL_Y + rows * ROW_H + 15;
     }
 
+    std::vector<SavegameSlot> partySaves;
     GraphicsImage *_background = nullptr;
 };
 
@@ -203,7 +235,10 @@ FsmAction CoopMenuState::update() {
         if (_window->keyboard_input_status == WINDOW_INPUT_CONFIRMED) {
             std::span<const int> shown = pageFields(_window->page);
             auto pos = std::ranges::find(shown, _window->selected);
-            selectField(shown[(pos - shown.begin() + 1) % shown.size()]);
+            int next = shown[(pos - shown.begin() + 1) % shown.size()];
+            if (next == std::to_underlying(COOP_MENU_FIELD_PARTY))
+                next = shown.front(); // The party is picked by clicking, not typed.
+            selectField(next);
         } else if (_window->keyboard_input_status == WINDOW_INPUT_NONE) {
             showPage(COOP_MENU_PAGE_CHOOSE); // Escape ends text input, it's the only way to get here.
             return FsmAction::none();
@@ -222,7 +257,11 @@ FsmAction CoopMenuState::update() {
             showPage(COOP_MENU_PAGE_JOIN);
             break;
         case UIMSG_CoopMenu_SelectField:
-            selectField(param);
+            if (param == std::to_underlying(COOP_MENU_FIELD_PARTY)) {
+                _window->chooseNextPartySave();
+            } else {
+                selectField(param);
+            }
             break;
         case UIMSG_CoopMenu_Host:
             if (host())

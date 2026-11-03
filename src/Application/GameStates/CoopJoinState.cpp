@@ -13,7 +13,6 @@
 
 #include "Utility/String/Format.h"
 
-static constexpr char COOP_SAVE_FILE_NAME[] = "coop.mm7";
 static constexpr std::chrono::seconds FAILURE_MESSAGE_DURATION{5};
 static constexpr std::chrono::seconds RETRY_INTERVAL{2};
 static constexpr std::chrono::seconds RETRY_DURATION{120};
@@ -39,7 +38,7 @@ FsmAction CoopJoinState::update() {
         drawMessage(_retrying ? WAITING_MESSAGE : "Joining co-op game...");
         return FsmAction::none();
     case COOP_CLIENT_JOINED: {
-        std::string fileName = COOP_SAVE_FILE_NAME;
+        std::string fileName(COOP_JOINED_SAVE_FILE_NAME);
         ufs->write(fmt::format("saves/{}", fileName), coopSession->takeJoinedSave());
         engine->_pendingLoadFileName = fileName;
         SetCurrentMenuID(MENU_LoadingProcInMainMenu);
