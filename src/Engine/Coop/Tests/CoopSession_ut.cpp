@@ -8,6 +8,7 @@
 #include <thread>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "Testing/Unit/UnitTest.h"
 
@@ -314,4 +315,63 @@ UNIT_TEST(CoopSession, HostWithoutGameAsksToRetry) {
     EXPECT_EQ(client->state(), COOP_CLIENT_FAILED);
     EXPECT_TRUE(client->canRetry());
     EXPECT_TRUE(client->failureReason().contains("hasn't started a game yet"));
+}
+
+static std::unique_ptr<CoopClient> lobbyClient(CoopServer *server, std::string_view name) {
+    // Connects a client and waits until the server has let it into the lobby.
+    auto client = std::make_unique<CoopClient>("127.0.0.1", server->port(), name);
+    EXPECT_TRUE(pumpUntil(server, {client.get()}, [&] { return client->state() != COOP_CLIENT_CONNECTING; }));
+    EXPECT_EQ(client->state(), COOP_CLIENT_IN_LOBBY);
+    return client;
+}
+
+UNIT_TEST(CoopSession, LobbyListsPlayersAndWhoIsReady) {
+    // Players who join an open lobby see everyone in it, the host first, and who has a party ready.
+    CoopServer server(0, 4, [] { return Blob(); }, "Hostess");
+    server.openLobby();
+    std::unique_ptr<CoopClient> one = lobbyClient(&server, "One");
+    std::unique_ptr<CoopClient> two = lobbyClient(&server, "Two");
+
+    one->setReady(true);
+    server.setHostReady(true);
+    std::vector<CoopLobbyPlayer> expected = {{CoopServer::HOST_PLAYER_ID, "Hostess", true}, {one->playerId(), "One", true},
+                                             {two->playerId(), "Two", false}};
+    EXPECT_TRUE(pumpUntil(&server, {one.get(), two.get()}, [&] { return two->lobbyPlayers() == expected; }));
+    EXPECT_EQ(server.lobbyPlayers(), expected);
+    EXPECT_EQ(one->lobbyPlayers(), expected);
+    EXPECT_EQ(server.joinedClientCount(), 0);
+}
+
+UNIT_TEST(CoopSession, LobbyPlayersJoinOnceHostIsInGame) {
+    // Starting the game welcomes everyone in the lobby, but only once the host's game is running.
+    Blob world;
+    CoopServer server(0, 4, [&] { return Blob::share(world); });
+    server.openLobby();
+    std::unique_ptr<CoopClient> client = lobbyClient(&server, "Zoltan");
+
+    server.startGame();
+    for (int i = 0; i < 10; i++) { // The host is still on its way into the game, there's no world to hand out.
+        server.update();
+        client->update();
+    }
+    EXPECT_EQ(client->state(), COOP_CLIENT_IN_LOBBY);
+
+    world = testSaveGame();
+    EXPECT_TRUE(pumpUntil(&server, {client.get()}, [&] { return client->state() == COOP_CLIENT_JOINED; }));
+    EXPECT_EQ(client->takeSaveGame().str(), "the world");
+    EXPECT_EQ(server.joinedClientCount(), 1);
+    EXPECT_FALSE(server.isLobbyOpen());
+}
+
+UNIT_TEST(CoopSession, LobbyLeaverIsRemovedFromList) {
+    // A player who leaves the lobby disappears from everyone else's list.
+    CoopServer server(0, 4, [] { return Blob(); });
+    server.openLobby();
+    std::unique_ptr<CoopClient> stayer = lobbyClient(&server, "Stayer");
+    std::unique_ptr<CoopClient> leaver = lobbyClient(&server, "Leaver");
+    EXPECT_TRUE(pumpUntil(&server, {stayer.get(), leaver.get()}, [&] { return stayer->lobbyPlayers().size() == 3; }));
+
+    leaver.reset();
+    EXPECT_TRUE(pumpUntil(&server, {stayer.get()}, [&] { return stayer->lobbyPlayers().size() == 2; }));
+    EXPECT_EQ(server.lobbyPlayers().size(), 2);
 }

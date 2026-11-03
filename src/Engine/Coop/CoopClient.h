@@ -61,7 +61,7 @@ class CoopClient {
     }
 
     /**
-     * @return                          Player id the host assigned, -1 until joined.
+     * @return                          Player id the host assigned, -1 until joined or let into the lobby.
      */
     [[nodiscard]] int playerId() const {
         return _playerId;
@@ -73,6 +73,20 @@ class CoopClient {
      * @return                          Host's game serialized as a save file, empty if not joined yet.
      */
     [[nodiscard]] Blob takeSaveGame();
+
+    /**
+     * Tells the host whether this client's party is ready for the game to start. Does nothing outside the lobby.
+     *
+     * @param ready                     Whether the party is ready.
+     */
+    void setReady(bool ready);
+
+    /**
+     * @return                          Everyone in the lobby with the host first, as the host last reported it.
+     */
+    [[nodiscard]] const std::vector<CoopLobbyPlayer> &lobbyPlayers() const {
+        return _lobbyPlayers;
+    }
 
     /**
      * Sends this client's party pose to the host. Does nothing until joined.
@@ -258,4 +272,5 @@ class CoopClient {
     std::optional<CoopClock> _clock;
     std::vector<CoopItemDropped> _itemsDropped;
     std::vector<CoopSpriteLaunched> _spritesLaunched;
+    std::vector<CoopLobbyPlayer> _lobbyPlayers;
 };

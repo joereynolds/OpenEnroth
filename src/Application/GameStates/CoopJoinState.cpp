@@ -37,6 +37,9 @@ FsmAction CoopJoinState::update() {
     case COOP_CLIENT_CONNECTING:
         drawMessage(_retrying ? WAITING_MESSAGE : "Joining co-op game...");
         return FsmAction::none();
+    case COOP_CLIENT_IN_LOBBY:
+        drawMessage("Waiting for the host to start the game...");
+        return FsmAction::none();
     case COOP_CLIENT_JOINED: {
         std::string fileName(COOP_JOINED_SAVE_FILE_NAME);
         ufs->write(fmt::format("saves/{}", fileName), coopSession->takeJoinedSave());

@@ -380,6 +380,15 @@ UNIT_TEST(CoopProtocol, SpriteLaunchedRoundTrip) {
     EXPECT_EQ(decoded.sprite.uFacing, 512);
 }
 
+UNIT_TEST(CoopProtocol, LobbyStatusRoundTrip) {
+    // The lobby list keeps every player's id, name and whether they're ready, in order.
+    CoopLobbyStatus status;
+    status.players = {{0, "Hostess", true}, {3, "Zoltan", false}};
+
+    CoopLobbyStatus decoded = roundTrip(status);
+    EXPECT_EQ(decoded.players, status.players);
+}
+
 UNIT_TEST(CoopProtocol, UnknownTypeThrows) {
     // A message with a type byte past the last known message is rejected.
     EXPECT_THROW((void) decodeCoopMessage(Blob::fromString(std::string(1, '\x7F'))), Exception);

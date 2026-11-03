@@ -52,6 +52,13 @@ Blob CoopClient::takeSaveGame() {
     return std::move(_saveGame);
 }
 
+void CoopClient::setReady(bool ready) {
+    if (_state != COOP_CLIENT_IN_LOBBY)
+        return;
+
+    _net->send(_host, NET_CHANNEL_RELIABLE, encodeCoopMessage(CoopLobbyReady{ready}));
+}
+
 void CoopClient::sendLocalPose(const CoopPartyPose &pose) {
     if (_state != COOP_CLIENT_JOINED)
         return;
@@ -206,14 +213,25 @@ std::vector<CoopActorStates> CoopClient::takeActorStates() {
 
 void CoopClient::handleMessage(CoopMessage message) {
     if (CoopWelcome *welcome = std::get_if<CoopWelcome>(&message)) {
-        if (_state != COOP_CLIENT_CONNECTING) {
+        if (_state != COOP_CLIENT_CONNECTING && _state != COOP_CLIENT_IN_LOBBY) {
             fail("Host sent a second welcome");
             return;
         }
         _state = COOP_CLIENT_JOINED;
         _playerId = welcome->playerId;
         _saveGame = std::move(welcome->saveGame);
+        _lobbyPlayers.clear();
         MM_INFO("Joined co-op game as player {}", _playerId);
+    } else if (const CoopLobbyJoined *joined = std::get_if<CoopLobbyJoined>(&message)) {
+        if (_state != COOP_CLIENT_CONNECTING) {
+            fail("Host let us into the lobby twice");
+            return;
+        }
+        _state = COOP_CLIENT_IN_LOBBY;
+        _playerId = joined->playerId;
+        MM_INFO("Joined co-op lobby as player {}", _playerId);
+    } else if (CoopLobbyStatus *status = std::get_if<CoopLobbyStatus>(&message)) {
+        _lobbyPlayers = std::move(status->players);
     } else if (CoopReject *reject = std::get_if<CoopReject>(&message)) {
         _canRetry = reject->retryLater;
         fail(fmt::format("Host refused to let us in: {}", reject->reason));

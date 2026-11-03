@@ -48,9 +48,38 @@ class CoopServer {
     void update();
 
     /**
-     * @return                          Number of clients that have joined.
+     * @return                          Number of clients that have joined a game, those waiting in the lobby left out.
      */
     [[nodiscard]] int joinedClientCount() const;
+
+    /**
+     * Lets clients in before the host is in a game. They wait in the lobby, and get the world once `startGame` has
+     * been called and the host's game is running.
+     */
+    void openLobby();
+
+    /**
+     * @return                          Whether clients are let into the lobby, from `openLobby` until `startGame`.
+     */
+    [[nodiscard]] bool isLobbyOpen() const {
+        return _lobbyOpen;
+    }
+
+    /**
+     * @param ready                     Whether the host's party is ready for the game to start.
+     */
+    void setHostReady(bool ready);
+
+    /**
+     * @return                          Everyone in the lobby with the host first, empty if the lobby isn't open.
+     */
+    [[nodiscard]] std::vector<CoopLobbyPlayer> lobbyPlayers() const;
+
+    /**
+     * Closes the lobby. Everyone who waited in it is welcomed into the host's game as soon as `update` finds the host
+     * in one.
+     */
+    void startGame();
 
     /**
      * Sends everything queued so far right away instead of on the next `update`.
@@ -224,10 +253,19 @@ class CoopServer {
     struct Client {
         int playerId = -1; // -1 until the client's hello is accepted.
         std::string playerName;
+        bool inLobby = false; // Accepted, but not welcomed into a game yet.
+        bool ready = false; // In the lobby with a party to start with.
+
+        bool isInGame() const {
+            return playerId != -1 && !inLobby;
+        }
     };
 
     void handleMessage(NetPeerId peer, CoopMessage message);
     void handleHello(NetPeerId peer, const CoopHello &hello);
+    void welcome(NetPeerId peer, Blob saveGame);
+    void welcomeLobby();
+    void sendLobbyStatus();
     void handlePartyPose(NetPeerId peer, CoopPartyPose pose);
     void handleDisconnect(NetPeerId peer);
     void startVote(int proposerId, NetPeerId proposerPeer, CoopVoteKind kind, const MapDestination &destination);
@@ -246,6 +284,9 @@ class CoopServer {
     std::optional<CoopPartyPose> _localPose;
     std::map<int, CoopPartyPose> _remoteParties;
     std::string _hostName;
+    bool _lobbyOpen = false;
+    bool _hostReady = false;
+    bool _gameStarting = false; // Lobby closed, its players are welcomed once the host's game runs.
 
     struct Vote {
         int id = -1;

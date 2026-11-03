@@ -44,10 +44,44 @@ void CoopServer::update() {
             break;
         }
     }
+
+    if (_gameStarting)
+        welcomeLobby();
 }
 
 int CoopServer::joinedClientCount() const {
-    return std::ranges::count_if(_clients, [](const auto &entry) { return entry.second.playerId != -1; });
+    return std::ranges::count_if(_clients, [](const auto &entry) { return entry.second.isInGame(); });
+}
+
+void CoopServer::openLobby() {
+    _lobbyOpen = true;
+    _gameStarting = false;
+}
+
+void CoopServer::setHostReady(bool ready) {
+    _hostReady = ready;
+    sendLobbyStatus();
+}
+
+std::vector<CoopLobbyPlayer> CoopServer::lobbyPlayers() const {
+    std::vector<CoopLobbyPlayer> result;
+    if (!_lobbyOpen)
+        return result;
+
+    result.push_back(CoopLobbyPlayer{HOST_PLAYER_ID, _hostName, _hostReady});
+    std::vector<CoopLobbyPlayer> clients;
+    for (const auto &[peer, client] : _clients)
+        if (client.inLobby)
+            clients.push_back(CoopLobbyPlayer{client.playerId, client.playerName, client.ready});
+    std::ranges::sort(clients, {}, &CoopLobbyPlayer::playerId); // In the order they joined.
+    result.insert(result.end(), clients.begin(), clients.end());
+    return result;
+}
+
+void CoopServer::startGame() {
+    assert(_lobbyOpen);
+    _lobbyOpen = false;
+    _gameStarting = true;
 }
 
 void CoopServer::flush() {
@@ -73,7 +107,7 @@ void CoopServer::sendPartyHit(int playerId, const CoopPartyHit &hit) {
 void CoopServer::sendQuestBit(const CoopQuestBit &change) {
     Blob data = encodeCoopMessage(change);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != change.playerId)
+        if (client.isInGame() && client.playerId != change.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -84,7 +118,7 @@ std::vector<CoopQuestBit> CoopServer::takeQuestBits() {
 void CoopServer::sendQuestRewards(const CoopQuestRewards &rewards) {
     Blob data = encodeCoopMessage(rewards);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != rewards.playerId)
+        if (client.isInGame() && client.playerId != rewards.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -95,7 +129,7 @@ std::vector<CoopQuestRewards> CoopServer::takeQuestRewards() {
 void CoopServer::sendChest(const CoopChest &chest) {
     Blob data = encodeCoopMessage(chest);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != chest.playerId)
+        if (client.isInGame() && client.playerId != chest.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -106,7 +140,7 @@ std::vector<CoopChest> CoopServer::takeChests() {
 void CoopServer::sendGroundItemTaken(const CoopGroundItemTaken &taken) {
     Blob data = encodeCoopMessage(taken);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != taken.playerId)
+        if (client.isInGame() && client.playerId != taken.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -125,7 +159,7 @@ std::vector<CoopActorBuff> CoopServer::takeActorBuffs() {
 void CoopServer::sendItemDropped(const CoopItemDropped &dropped) {
     Blob data = encodeCoopMessage(dropped);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != dropped.playerId)
+        if (client.isInGame() && client.playerId != dropped.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -136,7 +170,7 @@ std::vector<CoopItemDropped> CoopServer::takeItemsDropped() {
 void CoopServer::sendSpriteLaunched(const CoopSpriteLaunched &launched) {
     Blob data = encodeCoopMessage(launched);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != launched.playerId)
+        if (client.isInGame() && client.playerId != launched.playerId)
             _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
@@ -211,6 +245,9 @@ void CoopServer::handleMessage(NetPeerId peer, CoopMessage message) {
     } else if (CoopLootRequest *request = std::get_if<CoopLootRequest>(&message)) {
         request->playerId = _clients[peer].playerId;
         _lootRequests.push_back(std::move(*request));
+    } else if (const CoopLobbyReady *ready = std::get_if<CoopLobbyReady>(&message)) {
+        _clients[peer].ready = ready->ready;
+        sendLobbyStatus();
     } else if (const CoopVoteAnswer *answer = std::get_if<CoopVoteAnswer>(&message)) {
         if (_vote && _vote->id == answer->voteId) // Answers to a vote that has already ended are dropped.
             recordAnswer(_clients[peer].playerId, answer->accepted);
@@ -233,6 +270,16 @@ void CoopServer::handleHello(NetPeerId peer, const CoopHello &hello) {
         return;
     }
 
+    if (_lobbyOpen || _gameStarting) {
+        client.playerId = _nextPlayerId++;
+        client.playerName = hello.playerName;
+        client.inLobby = true;
+        MM_INFO("Co-op player '{}' joined the lobby as player {}", client.playerName, client.playerId);
+        send(peer, NET_CHANNEL_RELIABLE, CoopLobbyJoined{client.playerId});
+        sendLobbyStatus();
+        return;
+    }
+
     Blob saveGame = _saveGameProvider();
     if (!saveGame) {
         reject(peer, CoopReject{.reason = "The host hasn't started a game yet", .retryLater = true});
@@ -242,17 +289,47 @@ void CoopServer::handleHello(NetPeerId peer, const CoopHello &hello) {
     client.playerId = _nextPlayerId++;
     client.playerName = hello.playerName;
     MM_INFO("Co-op player '{}' joined as player {}", client.playerName, client.playerId);
+    welcome(peer, std::move(saveGame));
+}
 
-    CoopWelcome welcome;
-    welcome.playerId = client.playerId;
-    welcome.saveGame = std::move(saveGame);
-    send(peer, NET_CHANNEL_RELIABLE, std::move(welcome));
+void CoopServer::welcome(NetPeerId peer, Blob saveGame) {
+    CoopWelcome message;
+    message.playerId = _clients[peer].playerId;
+    message.saveGame = std::move(saveGame);
+    send(peer, NET_CHANNEL_RELIABLE, std::move(message));
 
     // Reliable, so that the newcomer sees everyone on its first frame in the game.
     if (_localPose)
         send(peer, NET_CHANNEL_RELIABLE, *_localPose);
     for (const auto &[playerId, pose] : _remoteParties)
         send(peer, NET_CHANNEL_RELIABLE, pose);
+}
+
+void CoopServer::welcomeLobby() {
+    Blob saveGame = _saveGameProvider();
+    if (!saveGame)
+        return; // The host is still on its way into the game.
+
+    _gameStarting = false;
+    for (auto &[peer, client] : _clients) {
+        if (!client.inLobby)
+            continue;
+        client.inLobby = false;
+        MM_INFO("Co-op player '{}' joined from the lobby as player {}", client.playerName, client.playerId);
+        welcome(peer, Blob::share(saveGame));
+    }
+}
+
+void CoopServer::sendLobbyStatus() {
+    if (!_lobbyOpen)
+        return;
+
+    CoopLobbyStatus status;
+    status.players = lobbyPlayers();
+    Blob data = encodeCoopMessage(status);
+    for (const auto &[peer, client] : _clients)
+        if (client.inLobby)
+            _net->send(peer, NET_CHANNEL_RELIABLE, data);
 }
 
 void CoopServer::handlePartyPose(NetPeerId peer, CoopPartyPose pose) {
@@ -275,6 +352,7 @@ void CoopServer::handleDisconnect(NetPeerId peer) {
 
     MM_INFO("Co-op player '{}' left", playerName);
     _remoteParties.erase(playerId);
+    sendLobbyStatus();
 
     CoopPlayerLeft left;
     left.playerId = playerId;
@@ -307,7 +385,7 @@ void CoopServer::startVote(int proposerId, NetPeerId proposerPeer, CoopVoteKind 
     if (proposerId != HOST_PLAYER_ID)
         vote.waitingFor.insert(HOST_PLAYER_ID);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && client.playerId != proposerId)
+        if (client.isInGame() && client.playerId != proposerId)
             vote.waitingFor.insert(client.playerId);
     _vote = vote;
 
@@ -382,6 +460,6 @@ void CoopServer::send(NetPeerId peer, NetChannel channel, CoopMessage message) {
 void CoopServer::sendToJoined(NetChannel channel, CoopMessage message, NetPeerId except) {
     Blob data = encodeCoopMessage(message);
     for (const auto &[peer, client] : _clients)
-        if (client.playerId != -1 && peer != except)
+        if (client.isInGame() && peer != except)
             _net->send(peer, channel, data);
 }

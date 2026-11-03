@@ -213,11 +213,39 @@ struct CoopSpriteLaunched {
     SpriteObject sprite;
 };
 
+/**
+ * Host to client, accepts a `CoopHello` into the lobby of a game that hasn't started yet. A `CoopWelcome` follows once
+ * the host starts it.
+ */
+struct CoopLobbyJoined {
+    int playerId = -1;
+};
+
+/** One player waiting in the lobby. */
+struct CoopLobbyPlayer {
+    int playerId = -1;
+    std::string name;
+    bool ready = false; // Has a party to start with.
+
+    friend bool operator==(const CoopLobbyPlayer &l, const CoopLobbyPlayer &r) = default;
+};
+
+/** Host to clients, everyone in the lobby with the host first. Sent whenever someone joins, leaves or gets ready. */
+struct CoopLobbyStatus {
+    std::vector<CoopLobbyPlayer> players;
+};
+
+/** Client to host, whether the client's party is ready for the game to start. */
+struct CoopLobbyReady {
+    bool ready = false;
+};
+
 using CoopMessage = std::variant<CoopHello, CoopWelcome, CoopReject, CoopPartyPose, CoopPlayerLeft,
                                  CoopVoteRequest, CoopVote, CoopVoteAnswer, CoopVoteDecision,
                                  CoopActorStates, CoopActorDamage, CoopPartyHit, CoopLootRequest, CoopLoot,
                                  CoopQuestBit, CoopQuestRewards, CoopChest, CoopGroundItemTaken, CoopClock,
-                                 CoopActorBuff, CoopItemDropped, CoopSpriteLaunched>;
+                                 CoopActorBuff, CoopItemDropped, CoopSpriteLaunched, CoopLobbyJoined, CoopLobbyStatus,
+                                 CoopLobbyReady>;
 
 /**
  * @param message                       Message to encode.

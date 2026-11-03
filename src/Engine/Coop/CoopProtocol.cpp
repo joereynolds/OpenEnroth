@@ -487,6 +487,43 @@ static void deserializeBody(InputStream &src, CoopSpriteLaunched *dst) {
     reconstruct(snapshotSprite, &dst->sprite);
 }
 
+static void serializeBody(const CoopLobbyJoined &src, OutputStream *dst) {
+    serializeInt(src.playerId, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopLobbyJoined *dst) {
+    dst->playerId = deserializeInt(src);
+}
+
+static void serializeBody(const CoopLobbyStatus &src, OutputStream *dst) {
+    serializeInt(src.players.size(), dst);
+    for (const CoopLobbyPlayer &player : src.players) {
+        serializeInt(player.playerId, dst);
+        serialize(player.name, dst);
+        serializeBool(player.ready, dst);
+    }
+}
+
+static void deserializeBody(InputStream &src, CoopLobbyStatus *dst) {
+    int count = deserializeInt(src);
+    if (count < 0 || count > COOP_MAX_CLIENTS + 1)
+        throw Exception("Invalid coop lobby size {}", count);
+    dst->players.resize(count);
+    for (CoopLobbyPlayer &player : dst->players) {
+        player.playerId = deserializeInt(src);
+        deserialize(src, &player.name);
+        player.ready = deserializeBool(src);
+    }
+}
+
+static void serializeBody(const CoopLobbyReady &src, OutputStream *dst) {
+    serializeBool(src.ready, dst);
+}
+
+static void deserializeBody(InputStream &src, CoopLobbyReady *dst) {
+    dst->ready = deserializeBool(src);
+}
+
 template<size_t I = 0>
 static CoopMessage deserializeAlternative(size_t index, InputStream &src) {
     if constexpr (I == std::variant_size_v<CoopMessage>) {
