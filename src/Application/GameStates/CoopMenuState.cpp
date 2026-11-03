@@ -58,7 +58,7 @@ using enum CoopMenuPage;
 static constexpr int FIELD_COUNT = 4;
 static constexpr int FIELD_MAX_LENGTH = 40;
 static constexpr std::array<const char *, FIELD_COUNT> FIELD_LABELS = {"Your name", "Host address", "Port", "Your party"};
-static constexpr char HOST_PARTY_COPY_TEXT[] = "Copy of the host's party";
+static constexpr char NO_SAVES_TEXT[] = "No saves yet";
 
 static constexpr int PANEL_X = 120;
 static constexpr int PANEL_Y = 110;
@@ -102,8 +102,9 @@ class GUIWindow_CoopMenu : public GUIWindow {
         if (page == COOP_MENU_PAGE_JOIN) {
             partySaves = loadMenuSlots();
             std::erase_if(partySaves, [](const SavegameSlot &slot) { return slot.fileName == COOP_JOINED_SAVE_FILE_NAME; });
-            if (!std::ranges::contains(partySaves, fields[std::to_underlying(COOP_MENU_FIELD_PARTY)], &SavegameSlot::fileName))
-                fields[std::to_underlying(COOP_MENU_FIELD_PARTY)].clear();
+            std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
+            if (!std::ranges::contains(partySaves, party, &SavegameSlot::fileName))
+                party = partySaves.empty() ? std::string() : partySaves.front().fileName;
         }
         if (page == COOP_MENU_PAGE_CHOOSE) {
             CreateButton("CoopMenu_HostPage", {PANEL_X + 20, rowY(0)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowHostPage, 0);
@@ -157,7 +158,7 @@ class GUIWindow_CoopMenu : public GUIWindow {
             drawFields(font);
             drawButton("CoopMenu_Join", "Join");
             drawButton("CoopMenu_Back", "Back");
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Click Your party to bring one of your saves.", frameRect);
+            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Click Your party to pick the save to bring.", frameRect);
             DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, "Saving as usual keeps your progress in it.", frameRect);
             break;
         }
@@ -167,17 +168,14 @@ class GUIWindow_CoopMenu : public GUIWindow {
     }
 
     /**
-     * Selects the next of the guest's saves to bring a party from, after the last one a copy of the host's party.
+     * Selects the next of the guest's saves to bring a party from, going back to the first after the last one.
      */
     void chooseNextPartySave() {
+        if (partySaves.empty())
+            return;
         std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
         auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
-        if (pos == partySaves.end()) {
-            party = partySaves.empty() ? std::string() : partySaves.front().fileName;
-        } else {
-            ++pos;
-            party = pos == partySaves.end() ? std::string() : pos->fileName;
-        }
+        party = pos == partySaves.end() || pos + 1 == partySaves.end() ? partySaves.front().fileName : (pos + 1)->fileName;
     }
 
     std::array<std::string, FIELD_COUNT> fields = {"Player", "", fmt::format("{}", COOP_DEFAULT_PORT), ""}; // The party is a file name in `saves`.
@@ -200,7 +198,7 @@ class GUIWindow_CoopMenu : public GUIWindow {
     std::string partyName() const {
         const std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
         auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
-        return pos == partySaves.end() ? HOST_PARTY_COPY_TEXT : pos->header.name;
+        return pos == partySaves.end() ? NO_SAVES_TEXT : pos->header.name;
     }
 
     GUIButton *findButton(std::string_view id) {
@@ -342,12 +340,14 @@ bool CoopMenuState::join() {
         _window->error = "The port has to be a number from 1 to 65535";
         return false;
     }
+    const std::string &party = _window->fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
+    if (party.empty()) {
+        _window->error = "Make a party with New Game and save it first";
+        return false;
+    }
 
     try {
-        Blob guestSave;
-        const std::string &party = _window->fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
-        if (!party.empty())
-            guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", party)));
+        Blob guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", party)));
         coopSession.reset();
         coopSession = CoopSession::join(address, *port, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)], std::move(guestSave), party);
     } catch (const std::exception &e) {

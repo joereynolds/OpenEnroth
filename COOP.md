@@ -7,8 +7,9 @@ Read it together with the doxygen comments in `src/Engine/Coop`, which document 
 ## Playing
 
 One player hosts, the others join. Click Multiplayer on the main menu, or press P, and pick Host a game or Join a
-friend's game. Hosting asks for your name and the port, joining also asks for the host's address. Clicking Your party
-on the join page goes through your saves by title, to bring that save's characters instead of a copy of the host's. Enter moves to the next field and Escape goes back one screen. Hosting returns to the main menu, where you
+friend's game. Hosting asks for your name and the port, joining also asks for the host's address and which of your
+saves to bring your party from. The join page starts on your first save by title, and clicking Your party goes through
+the others. Without any saves, make a party with New Game and save it first. Enter moves to the next field and Escape goes back one screen. Hosting returns to the main menu, where you
 start or load a game as usual.
 
 The same can be done from the command line:
@@ -24,7 +25,7 @@ OpenEnroth --connect 192.168.1.10 --name Bob --party save000.mm7
   two minutes while the host is unreachable or not in a game yet.
 * `--name NAME` is shown to the other players in votes and refusals. It defaults to `Player`.
 * `--party SAVE` names a save in the guest's own `saves` folder. That save's characters join the host's world. Without
-  it, the guest plays a copy of the host's party.
+  it, the guest plays a copy of the host's party, which is handy for testing. The join page always asks for a save.
 
 To carry progress between sessions, every player saves their own game as usual. A guest's save holds the guest's own
 characters, so rejoining later with `--party` and that save brings their progress along. The host's save holds the

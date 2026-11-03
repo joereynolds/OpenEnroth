@@ -89,7 +89,7 @@ static void joinFromCoopMenu(EngineController &game, CoopServer &server, int par
     eraseText(game, 4);
     typeText(game, std::to_string(server.port()));
     game.tick();
-    for (int i = 0; i < partyClicks; i++) { // Every click picks the next of the player's saves.
+    for (int i = 0; i < partyClicks; i++) { // The first save is picked to begin with, every click picks the next one.
         game.pressGuiButton("CoopMenu_Field3");
         game.tick();
     }
@@ -2113,7 +2113,7 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
 
     CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
     ufs->remove("saves/autosave.mm7"); // The guest's own save is the only one to pick.
-    joinFromCoopMenu(game, server, 1);
+    joinFromCoopMenu(game, server, 0);
     ASSERT_EQ(server.remoteParties().size(), 1);
     game.pointMouseAtDecoration(1); // Roland's cage.
     game.pressAndReleaseButton(BUTTON_LEFT);
@@ -2130,7 +2130,7 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
 
     CoopServer laterServer(0, 4, [&] { return Blob::share(hostSaveAfterwards); });
     ufs->remove("saves/autosave.mm7");
-    joinFromCoopMenu(game, laterServer, 1);
+    joinFromCoopMenu(game, laterServer, 0);
     ASSERT_EQ(laterServer.remoteParties().size(), 1);
 
     EXPECT_EQ(nameTape.back(), "Guestina");
@@ -2141,8 +2141,8 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
 }
 
 GAME_TEST(Coop, JoinPagePicksPartyFromSaves) {
-    // Clicking the party on the join page goes through the player's saves by title, then back to a copy of the host's
-    // party. The world a guest last joined isn't one of them.
+    // The join page starts on the first of the player's saves by title, and clicking the party goes through the rest
+    // and back to the first. The world a guest last joined isn't one of them.
     auto nameTape = tapes.custom([] { return pParty->pCharacters[0].name; });
     game.startNewGame();
     pParty->pCharacters[0].name = "Guestina";
@@ -2157,7 +2157,7 @@ GAME_TEST(Coop, JoinPagePicksPartyFromSaves) {
     MM_AT_SCOPE_EXIT(coopSession.reset());
     test.startTaping();
 
-    for (auto [clicks, name] : {std::pair(2, "Otherina"), std::pair(3, "Hostina")}) {
+    for (auto [clicks, name] : {std::pair(1, "Otherina"), std::pair(2, "Guestina")}) {
         CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
         ufs->remove("saves/autosave.mm7");
         joinFromCoopMenu(game, server, clicks);
@@ -2166,5 +2166,28 @@ GAME_TEST(Coop, JoinPagePicksPartyFromSaves) {
         game.goToMainMenu();
         coopSession.reset();
     }
-    EXPECT_MISSES(nameTape, "Coopina");
+    EXPECT_EQ(nameTape, tape("Hostina", "Otherina", "Guestina")); // Hostina is from setting up the host's world.
+}
+
+GAME_TEST(Coop, JoinNeedsAPartySave) {
+    // A player without any saves is told to make a party first, instead of joining without one.
+    auto joinPageTape = tapes.custom([] { return hasGuiButton("CoopMenu_Join"); });
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    for (const auto &entry : ufs->ls("saves"))
+        ufs->remove(fmt::format("saves/{}", entry.name));
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    test.startTaping();
+
+    joinFromCoopMenu(game, server, 0);
+
+    EXPECT_FALSE(coopSession);
+    EXPECT_TRUE(server.remoteParties().empty());
+    EXPECT_EQ(joinPageTape.back(), true); // Still on the join page, with the reason shown.
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE); // Back to the main menu, where the test run exits from.
+    game.tick();
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE);
+    game.tick();
 }
