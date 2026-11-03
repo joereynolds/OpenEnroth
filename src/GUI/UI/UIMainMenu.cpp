@@ -1,5 +1,7 @@
 #include "GUI/UI/UIMainMenu.h"
 
+#include <string_view>
+
 #include "Engine/EngineGlobals.h"
 #include "Engine/Localization.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
@@ -10,10 +12,12 @@
 #include "GUI/GUIButton.h"
 #include "GUI/GUIFont.h"
 #include "GUI/GUIMessageQueue.h"
+#include "GUI/UI/UIPopup.h"
 
 #include "Io/Mouse.h"
 
-static constexpr Recti COOP_LABEL_RECT(20, 450, 120, 20);
+static constexpr Sizei COOP_BUTTON_SIZE(110, 32);
+static constexpr std::string_view COOP_BUTTON_TEXT = "Multiplayer"; // OE addition, the original art has no image for it.
 
 GUIWindow_MainMenu::GUIWindow_MainMenu() :
     GUIWindow(WINDOW_MAIN_MENU, {0, 0}, render->GetRenderDimensions()) {
@@ -32,8 +36,9 @@ GUIWindow_MainMenu::GUIWindow_MainMenu() :
                                UIMSG_ShowCredits, 2, INPUT_ACTION_SHOW_CREDITS, "", {ui_mainmenu_credits});
     pBtnExit = CreateButton("MainMenu_ExitGame", {495, 337}, ui_mainmenu_exit->size(), BUTTON_TYPE_NORMAL, 0,
                             UIMSG_ExitToWindows, 3, INPUT_ACTION_EXIT_GAME, "", {ui_mainmenu_exit});
-    CreateButton("MainMenu_Coop", COOP_LABEL_RECT.topLeft(), COOP_LABEL_RECT.size(), BUTTON_TYPE_NORMAL, 0,
-                 UIMSG_MainMenu_ShowCoopMenu, 0, INPUT_ACTION_COOP_MENU);
+    Pointi coopPos(495 + (ui_mainmenu_exit->width() - COOP_BUTTON_SIZE.w) / 2, 390); // Centered under Exit.
+    pBtnCoop = CreateButton("MainMenu_Coop", coopPos, COOP_BUTTON_SIZE, BUTTON_TYPE_NORMAL, 0,
+                            UIMSG_MainMenu_ShowCoopMenu, 4, INPUT_ACTION_COOP_MENU);
 }
 
 GUIWindow_MainMenu::~GUIWindow_MainMenu() {
@@ -42,9 +47,16 @@ GUIWindow_MainMenu::~GUIWindow_MainMenu() {
 
 void GUIWindow_MainMenu::Update() {
     render->DrawQuad2D(main_menu_background, {0, 0});
-    DrawText(assets->pFontCreate.get(), COOP_LABEL_RECT.topLeft(), colorTable.White, "Co-op (P)", frameRect); // OE addition, not in the original art.
 
     Pointi pt = mouse->position();
+
+    GUIFont *font = assets->pFontCreate.get();
+    const Recti &coopRect = pBtnCoop->rect;
+    DrawPopupWindow(coopRect.x, coopRect.y, coopRect.w, coopRect.h);
+    Color coopColor = pBtnCoop->Contains(pt.x, pt.y) ? colorTable.LaserLemon : colorTable.White;
+    int coopX = coopRect.x + (coopRect.w - font->GetLineWidth(COOP_BUTTON_TEXT)) / 2;
+    int coopY = coopRect.y + (coopRect.h - font->GetHeight()) / 2;
+    DrawText(font, {coopX, coopY}, coopColor, COOP_BUTTON_TEXT, frameRect);
 
     GraphicsImage *pTexture = nullptr;
     for (GUIButton *pButton : vButtons) {
@@ -69,7 +81,8 @@ void GUIWindow_MainMenu::Update() {
                     pY = 337;
                     break;
             }
-            render->DrawQuad2D(pTexture, {495, pY});
+            if (pTexture)
+                render->DrawQuad2D(pTexture, {495, pY});
         }
     }
 }

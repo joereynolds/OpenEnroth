@@ -28,6 +28,7 @@
 #include "Engine/Objects/Chest.h"
 #include "Engine/Objects/SpriteObject.h"
 
+#include "GUI/GUIButton.h"
 #include "GUI/GUIWindow.h"
 #include "GUI/UI/UIChest.h"
 
@@ -68,6 +69,12 @@ static int groundItemCount(ItemId item) {
 
 static bool hasSprite(SpriteId sprite) {
     return std::ranges::any_of(pSpriteObjects, [&](const SpriteObject &object) { return object.uObjectDescID != 0 && object.spriteId == sprite; });
+}
+
+static bool hasGuiButton(std::string_view id) {
+    return std::ranges::any_of(lWindowList, [&](GUIWindow *window) {
+        return std::ranges::any_of(window->vButtons, [&](GUIButton *button) { return button->id == id; });
+    });
 }
 
 static int remotePartyBillboardCount(const Vec3f &pos) {
@@ -1654,6 +1661,8 @@ GAME_TEST(Coop, JoinFromCoopMenu) {
 
     game.pressAndReleaseKey(PlatformKey::KEY_P);
     game.tick();
+    game.pressGuiButton("CoopMenu_JoinPage");
+    game.tick();
     typeText(game, "127.0.0.1"); // The address field is selected first.
     game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
     game.tick(); // Enter finishes the field, the next one takes input from the next frame.
@@ -1679,6 +1688,8 @@ GAME_TEST(Coop, HostFromCoopMenu) {
     test.startTaping();
 
     game.pressAndReleaseKey(PlatformKey::KEY_P);
+    game.tick();
+    game.pressGuiButton("CoopMenu_HostPage");
     game.tick();
     game.pressGuiButton("CoopMenu_Field2"); // The port.
     game.tick();
@@ -2031,4 +2042,27 @@ GAME_TEST(Coop, GuestDrawsHostMonsterProjectiles) {
 
     EXPECT_CONTAINS(spritesTape.flatten(), SPRITE_PROJECTILE_ARROW);
     EXPECT_EQ(hpTape.size(), 1);
+}
+
+GAME_TEST(Coop, MultiplayerButtonOpensCoopMenu) {
+    // The main menu's Multiplayer button asks whether to host or join, and Escape steps back one screen at a time.
+    auto choiceTape = tapes.custom([] { return hasGuiButton("CoopMenu_HostPage"); });
+    auto joinFormTape = tapes.custom([] { return hasGuiButton("CoopMenu_Join"); });
+    auto mainMenuTape = tapes.custom([] { return hasGuiButton("MainMenu_NewGame"); });
+    game.goToMainMenu();
+    test.startTaping();
+
+    game.pressGuiButton("MainMenu_Coop");
+    game.tick();
+    game.pressGuiButton("CoopMenu_JoinPage");
+    game.tick();
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE);
+    game.tick();
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE);
+    game.tick();
+
+    EXPECT_EQ(choiceTape, tape(true, false, true, false));
+    EXPECT_EQ(joinFormTape, tape(false, true, false));
+    EXPECT_EQ(mainMenuTape, tape(false, true));
+    EXPECT_FALSE(coopSession);
 }

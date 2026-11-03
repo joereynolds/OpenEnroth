@@ -226,6 +226,8 @@ enum UIMessageType : uint32_t {
     UIMSG_CoopMenu_Host = 2008,
     UIMSG_CoopMenu_Join = 2009,
     UIMSG_CoopMenu_Back = 2010,
+    UIMSG_CoopMenu_ShowHostPage = 2011,
+    UIMSG_CoopMenu_ShowJoinPage = 2012,
 
     UIMSG_Invalid = 0xffffffff
 };

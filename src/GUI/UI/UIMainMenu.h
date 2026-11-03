@@ -15,6 +15,7 @@ class GUIWindow_MainMenu : public GUIWindow {
 
  protected:
     GUIButton *pBtnExit = nullptr;
+    GUIButton *pBtnCoop = nullptr;
     GUIButton *pBtnCredits = nullptr;
     GUIButton *pBtnLoad = nullptr;
     GUIButton *pBtnNew = nullptr;

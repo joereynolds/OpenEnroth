@@ -6,9 +6,10 @@ Read it together with the doxygen comments in `src/Engine/Coop`, which document 
 
 ## Playing
 
-One player hosts, the others join. Press P on the main menu, or click "Co-op (P)", to open the co-op screen. Type
-your name, the host's address, the port and optionally one of your saves, then click Host or Join. Enter moves to the
-next field and Escape goes back. Hosting returns to the main menu, where you start or load a game as usual.
+One player hosts, the others join. Click Multiplayer on the main menu, or press P, and pick Host a game or Join a
+friend's game. Hosting asks for your name and the port, joining also asks for the host's address and optionally one of
+your saves. Enter moves to the next field and Escape goes back one screen. Hosting returns to the main menu, where you
+start or load a game as usual.
 
 The same can be done from the command line:
 
