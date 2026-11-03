@@ -67,13 +67,14 @@ CoopSession::~CoopSession() {
     engine->_launchedSprites.clear();
 }
 
-std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients) {
+std::unique_ptr<CoopSession> CoopSession::host(int port, int maxClients, std::string_view playerName) {
     std::unique_ptr<CoopSession> result(new CoopSession());
     result->_server = std::make_unique<CoopServer>(port, maxClients, [] {
-        if (GetCurrentMenuID() != MENU_NONE)
-            return Blob(); // Main menu or party creation, there's no world to hand out.
+        if (GetCurrentMenuID() != MENU_NONE || engine->_pendingTransition)
+            return Blob(); // Main menu, party creation, or a map still loading, there's no world to hand out.
         return createSaveData(false, "Co-op").second;
-    });
+    }, std::string(playerName));
+    result->_playerName = playerName;
     return result;
 }
 
@@ -89,6 +90,12 @@ std::unique_ptr<CoopSession> CoopSession::join(std::string_view address, int por
     return result;
 }
 
+void CoopSession::setGuestSave(Blob guestSave, std::string_view guestSaveFileName) {
+    _guestSave = std::move(guestSave);
+    _guestSaveFileName = guestSaveFileName;
+    _choosesParty = false;
+}
+
 void CoopSession::retryJoin() {
     assert(_client);
     _client = std::make_unique<CoopClient>(_joinAddress, _joinPort, _playerName);
@@ -100,6 +107,14 @@ Blob CoopSession::takeJoinedSave() {
     if (!hostSave || !_guestSave)
         return hostSave;
     return makeCoopGuestSave(hostSave, std::exchange(_guestSave, Blob()));
+}
+
+void CoopSession::pollNetwork() {
+    if (_server) {
+        _server->update();
+    } else {
+        _client->update();
+    }
 }
 
 void CoopSession::update() {

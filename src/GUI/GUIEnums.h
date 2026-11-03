@@ -228,6 +228,13 @@ enum UIMessageType : uint32_t {
     UIMSG_CoopMenu_Back = 2010,
     UIMSG_CoopMenu_ShowHostPage = 2011,
     UIMSG_CoopMenu_ShowJoinPage = 2012,
+    UIMSG_CoopParty_New = 2013,
+    UIMSG_CoopParty_Pick = 2014, // Param is the save's index in the list.
+    UIMSG_CoopParty_More = 2015,
+    UIMSG_CoopParty_Back = 2016,
+    UIMSG_CoopLobby_Start = 2017,
+    UIMSG_CoopLobby_Back = 2018,
+    UIMSG_CoopMenu_ShowHostNewPage = 2019,
 
     UIMSG_Invalid = 0xffffffff
 };
@@ -246,6 +253,7 @@ enum class MenuType {
     MENU_DebugBLVLevel = 10, // Was used to open a debug blv level in vanilla, not used in OE.
     MENU_CREDITSCLOSE = 11,
     MENU_MMT_MAIN_MENU = 12,
+    MENU_COOP_START_NEW_GAME = 13, // OE addition, a co-op host started the game from the lobby with its party created.
     MENU_NONE = -1,
 };
 using enum MenuType;
@@ -342,6 +350,8 @@ enum class WindowType {
     WINDOW_CREDITS,             // Vanilla MM7 uses 1.
     WINDOW_COOP_VOTE,
     WINDOW_COOP_MENU,
+    WINDOW_COOP_PARTY,
+    WINDOW_COOP_LOBBY,
 };
 using enum WindowType;
 

@@ -6,11 +6,15 @@ Read it together with the doxygen comments in `src/Engine/Coop`, which document 
 
 ## Playing
 
-One player hosts, the others join. Click Multiplayer on the main menu, or press P, and pick Host a game or Join a
-friend's game. Hosting asks for your name and the port, joining also asks for the host's address and which of your
-saves to bring your party from. The join page starts on your first save by title, and clicking Your party goes through
-the others. Without any saves, make a party with New Game and save it first. Enter moves to the next field and Escape goes back one screen. Hosting returns to the main menu, where you
-start or load a game as usual.
+One player hosts, the others join. Click Multiplayer on the main menu, or press P. Enter moves to the next field and
+Escape goes back one screen.
+
+* **Host a new game:** type your name and the port, then make your party. You wait in the lobby, which lists everyone
+  and whether their party is ready. Start begins a new game once everyone is ready, and brings them all into it.
+* **Host a saved game:** type your name and the port, then load your save. Friends join with saves of their own.
+* **Join a friend's game:** type your name, the host's address and the port. Once connected, pick Your party: create a
+  new one, or bring one from a save. A new party is saved right away as "Co-op - <your name>", so it can be picked next
+  time. You wait in the lobby until the host starts, or go straight in if the host is already playing.
 
 The same can be done from the command line:
 
@@ -75,7 +79,7 @@ The code is layered like this, lowest first:
 | `CoopServer`, `CoopClient` | `src/Engine/Coop` | Connection handling, the handshake, player ids, votes, and queues of received messages. They don't touch the engine. |
 | `CoopSession` | `src/Engine/Coop/CoopSession.*` | Connects the server or client to the running game. This is where engine state is read and written. |
 | Engine hooks | `Engine.h`, `CoopEvents.h` | Plain data on `Engine` that game code fills in and the session drains. They keep the engine from depending on the co-op library. |
-| Application | `Game.cpp`, `CoopMenuState`, `CoopJoinState`, `OpenEnrothOptions` | Command line options, the co-op and join screens, the vote prompts, and calling the session every frame. |
+| Application | `Game.cpp`, `CoopMenuState`, `CoopJoinState`, `CoopPartyState`, `CoopLobbyState`, `OpenEnrothOptions` | Command line options, the co-op, join, party and lobby screens, the vote prompts, and calling the session every frame. |
 
 `coopSession` is a global, like the rest of the engine's world state, and it's null outside of co-op. `Game::gameLoop`
 calls `coopSession->update()` once per frame, after the world update and before drawing. In the main menu,
@@ -108,6 +112,25 @@ its own save into it with `makeCoopGuestSave` (`CoopGuestSave.cpp`):
 * **Hirelings:** a guest's hirelings stay behind, because hiring is also recorded in the guest's own world's NPC table.
 
 The result is written to `saves/coop.mm7` and loaded like any other save.
+
+A guest that joins from the menu picks its party after connecting, on `CoopPartyState`, so it knows whether the host is
+starting a new game or already playing. A new party goes through the usual party creation, and `Game::loop` saves it
+with `saveNewParty` instead of starting a game with it. Either way the guest then waits on `CoopLobbyState`, which
+loads the joined world as soon as the welcome is in.
+
+### The lobby
+
+A host that picks Host a new game calls `CoopServer::openLobby` before making its party. Clients that say hello then
+get `CoopLobbyJoined` instead of a welcome, and wait as `COOP_CLIENT_IN_LOBBY`. `CoopLobbyStatus` keeps everyone's list
+of players and their readiness up to date, and clients report theirs with `CoopLobbyReady`. Lobby players get no game
+messages and take no part in votes.
+
+When the host presses Start, `CoopServer::startGame` closes the lobby, and the host's game starts the new game with the
+party it made, through `MENU_COOP_START_NEW_GAME`. The server welcomes everyone who waited as soon as the host's world
+can be saved, that is once the host is in the game and no map is loading.
+
+Party creation, movies and menus run their own frame loops, so `CoopNetworkComponent` polls the session's network
+whenever the application processes its messages. Otherwise ENet would drop a player who takes a while to make a party.
 
 
 ## What is synced, and how

@@ -136,7 +136,7 @@ int Game::run() {
 
     if (_coopOptions.hostPort) {
         try {
-            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS);
+            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS, _coopOptions.playerName);
             MM_INFO("Hosting co-op game on port {}", *_coopOptions.hostPort);
         } catch (const std::exception &e) {
             MM_ERROR("Could not host co-op game on port {}: {}", *_coopOptions.hostPort, e.what());
@@ -185,7 +185,7 @@ int Game::run() {
         if (!loop()) {
             break;
         } else {
-            startingState = "MainMenu";
+            startingState = std::exchange(_nextFsmState, "MainMenu");
         }
     } while (true);
 
@@ -212,10 +212,28 @@ bool Game::loop() {
                 continue;
             }
             break;
-        } else if (GetCurrentMenuID() == MENU_NEWGAME) {
-            pActiveOverlayList->Reset();
-            if (!PartyCreationUI_Loop()) {
-                break;
+        } else if (GetCurrentMenuID() == MENU_NEWGAME || GetCurrentMenuID() == MENU_COOP_START_NEW_GAME) {
+            bool coopLobby = coopSession && (coopSession->client() ? coopSession->choosesParty() : coopSession->server()->isLobbyOpen());
+            if (GetCurrentMenuID() == MENU_NEWGAME) {
+                pActiveOverlayList->Reset();
+                if (!PartyCreationUI_Loop()) {
+                    if (coopLobby)
+                        coopSession.reset(); // Backing out of party creation leaves the co-op game being set up.
+                    break;
+                }
+
+                pParty->pPickedItem.itemId = ITEM_NULL;
+                if (coopLobby) {
+                    if (coopSession->client()) {
+                        std::string fileName = saveNewParty(fmt::format("Co-op - {}", coopSession->playerName()));
+                        coopSession->setGuestSave(Blob::copy(ufs->read(fmt::format("saves/{}", fileName))), fileName);
+                        coopSession->client()->setReady(true);
+                    } else {
+                        coopSession->server()->setHostReady(true);
+                    }
+                    _nextFsmState = "CoopLobby"; // Waits for everyone's party, the host starts the game from there.
+                    break;
+                }
             }
 
             pParty->pPickedItem.itemId = ITEM_NULL;

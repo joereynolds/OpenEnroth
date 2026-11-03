@@ -35,11 +35,12 @@ class CoopSession {
     /**
      * @param port                      Port to listen on, zero picks a free one.
      * @param maxClients                Maximal number of simultaneously connected clients.
+     * @param playerName                Name to show to the other players.
      * @return                          Host session. Clients that join get the current game as a save, and are asked to
      *                                  come back later while the host isn't in a game.
      * @throws Exception                If the port couldn't be bound.
      */
-    [[nodiscard]] static std::unique_ptr<CoopSession> host(int port, int maxClients);
+    [[nodiscard]] static std::unique_ptr<CoopSession> host(int port, int maxClients, std::string_view playerName = "Host");
 
     /**
      * @param address                   Host name or IP address of the host.
@@ -54,6 +55,35 @@ class CoopSession {
      */
     [[nodiscard]] static std::unique_ptr<CoopSession> join(std::string_view address, int port, std::string_view playerName,
                                                            Blob guestSave, std::string_view guestSaveFileName = {});
+
+    /**
+     * Makes the guest pick its party once connected, instead of bringing the one passed to `join`.
+     */
+    void choosePartyAfterJoining() {
+        _choosesParty = true;
+    }
+
+    /**
+     * @return                          Whether the guest still has to pick its party, see `choosePartyAfterJoining`.
+     */
+    [[nodiscard]] bool choosesParty() const {
+        return _choosesParty;
+    }
+
+    /**
+     * Sets the save the guest brings its party from, like the one passed to `join`.
+     *
+     * @param guestSave                 One of the guest's own saves.
+     * @param guestSaveFileName         File name of `guestSave` in the `saves` folder.
+     */
+    void setGuestSave(Blob guestSave, std::string_view guestSaveFileName);
+
+    /**
+     * @return                          Name shown to the other players.
+     */
+    [[nodiscard]] const std::string &playerName() const {
+        return _playerName;
+    }
 
     /**
      * @return                          File name of the save the guest brought its party from, empty if there's none.
@@ -87,6 +117,12 @@ class CoopSession {
      *                                  party if there is one. Empty until joined.
      */
     [[nodiscard]] Blob takeJoinedSave();
+
+    /**
+     * Processes network events and nothing else, which keeps the connections alive outside the game loop. Messages
+     * that arrive are queued for `update`.
+     */
+    void pollNetwork();
 
     /**
      * Processes network events, sends the local party's pose if needed, and refreshes `Engine::_remoteParties`.
@@ -160,6 +196,7 @@ class CoopSession {
     std::string _playerName;
     Blob _guestSave;
     std::string _guestSaveFileName;
+    bool _choosesParty = false;
     std::optional<Vec3f> _lastFramePos;
     std::optional<CoopPartyPose> _lastSentPose;
     std::chrono::steady_clock::time_point _lastSendTime;

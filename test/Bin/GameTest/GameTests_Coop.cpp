@@ -32,6 +32,7 @@
 #include "GUI/GUIButton.h"
 #include "GUI/GUIWindow.h"
 #include "GUI/UI/UIChest.h"
+#include "GUI/UI/UISaveLoad.h"
 
 #include "Library/Platform/Application/PlatformApplication.h"
 #include "Library/Platform/Interface/PlatformEvents.h"
@@ -78,7 +79,7 @@ static bool hasGuiButton(std::string_view id) {
     });
 }
 
-static void joinFromCoopMenu(EngineController &game, CoopServer &server, int partyClicks) {
+static void connectFromCoopMenu(EngineController &game, CoopServer &server) {
     game.pressGuiButton("MainMenu_Coop");
     game.tick();
     game.pressGuiButton("CoopMenu_JoinPage");
@@ -89,12 +90,17 @@ static void joinFromCoopMenu(EngineController &game, CoopServer &server, int par
     eraseText(game, 4);
     typeText(game, std::to_string(server.port()));
     game.tick();
-    for (int i = 0; i < partyClicks; i++) { // The first save is picked to begin with, every click picks the next one.
-        game.pressGuiButton("CoopMenu_Field3");
+    game.pressGuiButton("CoopMenu_Join");
+    for (int i = 0; i < 100 && !hasGuiButton("CoopParty_New"); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
         game.tick();
     }
-    game.pressGuiButton("CoopMenu_Join");
-    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+}
+
+static void joinFromCoopMenu(EngineController &game, CoopServer &server, std::string_view partyButton) {
+    connectFromCoopMenu(game, server);
+    game.pressGuiButton(partyButton);
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // The world loads, then the party shows up.
         server.update();
         game.tick();
     }
@@ -1682,21 +1688,7 @@ GAME_TEST(Coop, JoinFromCoopMenu) {
     MM_AT_SCOPE_EXIT(coopSession.reset());
     test.startTaping();
 
-    game.pressAndReleaseKey(PlatformKey::KEY_P);
-    game.tick();
-    game.pressGuiButton("CoopMenu_JoinPage");
-    game.tick();
-    typeText(game, "127.0.0.1"); // The address field is selected first.
-    game.pressAndReleaseKey(PlatformKey::KEY_RETURN);
-    game.tick(); // Enter finishes the field, the next one takes input from the next frame.
-    eraseText(game, 4);
-    typeText(game, std::to_string(server.port()));
-    game.tick();
-    game.pressGuiButton("CoopMenu_Join");
-    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
-        server.update();
-        game.tick();
-    }
+    joinFromCoopMenu(game, server, "CoopParty_Save0");
 
     ASSERT_TRUE(coopSession);
     EXPECT_EQ(coopSession->client()->state(), COOP_CLIENT_JOINED);
@@ -1704,7 +1696,7 @@ GAME_TEST(Coop, JoinFromCoopMenu) {
 }
 
 GAME_TEST(Coop, HostFromCoopMenu) {
-    // The co-op screen on the main menu starts hosting on the port typed in, and goes back to the main menu.
+    // Hosting a saved game from the co-op screen listens on the port typed in, and goes on to the load menu.
     game.startNewGame();
     game.goToMainMenu();
     MM_AT_SCOPE_EXIT(coopSession.reset());
@@ -1725,7 +1717,10 @@ GAME_TEST(Coop, HostFromCoopMenu) {
     ASSERT_TRUE(coopSession);
     ASSERT_TRUE(coopSession->server());
     EXPECT_EQ(coopSession->server()->port(), 47347);
-    EXPECT_EQ(GetCurrentMenuID(), MENU_MAIN);
+    EXPECT_FALSE(coopSession->server()->isLobbyOpen());
+    EXPECT_EQ(GetCurrentMenuID(), MENU_SAVELOAD);
+    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE); // Back to the main menu, where the test run exits from.
+    game.tick();
 }
 
 GAME_TEST(Coop, GuestStunsAndKnockbackReachHost) {
@@ -2113,7 +2108,7 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
 
     CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
     ufs->remove("saves/autosave.mm7"); // The guest's own save is the only one to pick.
-    joinFromCoopMenu(game, server, 0);
+    joinFromCoopMenu(game, server, "CoopParty_Save0");
     ASSERT_EQ(server.remoteParties().size(), 1);
     game.pointMouseAtDecoration(1); // Roland's cage.
     game.pressAndReleaseButton(BUTTON_LEFT);
@@ -2130,7 +2125,7 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
 
     CoopServer laterServer(0, 4, [&] { return Blob::share(hostSaveAfterwards); });
     ufs->remove("saves/autosave.mm7");
-    joinFromCoopMenu(game, laterServer, 0);
+    joinFromCoopMenu(game, laterServer, "CoopParty_Save0");
     ASSERT_EQ(laterServer.remoteParties().size(), 1);
 
     EXPECT_EQ(nameTape.back(), "Guestina");
@@ -2140,10 +2135,11 @@ GAME_TEST(Coop, GuestProgressSurvivesRejoining) {
     EXPECT_EQ(engine->_currentLoadedMapId, MAP_COLONY_ZOD);
 }
 
-GAME_TEST(Coop, JoinPagePicksPartyFromSaves) {
-    // The join page starts on the first of the player's saves by title, and clicking the party goes through the rest
-    // and back to the first. The world a guest last joined isn't one of them.
+GAME_TEST(Coop, GuestPicksPartyAfterJoining) {
+    // Once connected to a host that's already playing, a guest picks which of their saves to bring a party from. The
+    // world they last joined isn't one of them.
     auto nameTape = tapes.custom([] { return pParty->pCharacters[0].name; });
+    auto thirdSaveTape = tapes.custom([] { return hasGuiButton("CoopParty_Save2"); });
     game.startNewGame();
     pParty->pCharacters[0].name = "Guestina";
     ufs->write("saves/save000.mm7", createSaveData(false, "Guest").second);
@@ -2154,40 +2150,106 @@ GAME_TEST(Coop, JoinPagePicksPartyFromSaves) {
     pParty->pCharacters[0].name = "Hostina";
     Blob hostSave = createSaveData(false, "Host").second;
     game.goToMainMenu();
+    ufs->remove("saves/autosave.mm7");
     MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
     test.startTaping();
 
-    for (auto [clicks, name] : {std::pair(1, "Otherina"), std::pair(2, "Guestina")}) {
-        CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
-        ufs->remove("saves/autosave.mm7");
-        joinFromCoopMenu(game, server, clicks);
-        ASSERT_EQ(server.remoteParties().size(), 1);
-        EXPECT_EQ(nameTape.back(), name);
-        game.goToMainMenu();
-        coopSession.reset();
-    }
-    EXPECT_EQ(nameTape, tape("Hostina", "Otherina", "Guestina")); // Hostina is from setting up the host's world.
+    joinFromCoopMenu(game, server, "CoopParty_Save1");
+
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    EXPECT_EQ(nameTape, tape("Hostina", "Otherina")); // Hostina is from setting up the host's world.
+    EXPECT_EQ(thirdSaveTape.max(), false);
 }
 
-GAME_TEST(Coop, JoinNeedsAPartySave) {
-    // A player without any saves is told to make a party first, instead of joining without one.
-    auto joinPageTape = tapes.custom([] { return hasGuiButton("CoopMenu_Join"); });
+GAME_TEST(Coop, GuestMakesPartyInLobby) {
+    // A guest who joins the lobby of a new game makes a party, which gets saved for next time, waits as ready, and
+    // comes into the host's world with it once the host starts.
+    auto nameTape = tapes.custom([] { return pParty->pCharacters[0].name; });
     game.startNewGame();
+    pParty->pCharacters[0].name = "Hostina";
     Blob hostSave = createSaveData(false, "Host").second;
-    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
     game.goToMainMenu();
-    for (const auto &entry : ufs->ls("saves"))
-        ufs->remove(fmt::format("saves/{}", entry.name));
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); }, "Hostess");
+    server.openLobby();
+    server.setHostReady(true);
+    test.startTaping();
+
+    connectFromCoopMenu(game, server);
+    game.pressGuiButton("CoopParty_New");
+    game.tick(2);
+    pParty->pCharacters[0].name = "Guestina"; // Stands in for typing a name in party creation.
+    game.pressGuiButton("PartyCreation_OK");
+    for (int i = 0; i < 100 && !hasGuiButton("CoopLobby_Back"); i++)
+        game.tick();
+    for (int i = 0; i < 100 && !std::ranges::all_of(server.lobbyPlayers(), &CoopLobbyPlayer::ready); i++) {
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.lobbyPlayers().size(), 2);
+    EXPECT_TRUE(server.lobbyPlayers()[1].ready);
+    server.startGame();
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // The world loads, then the party shows up.
+        server.update();
+        game.tick();
+    }
+
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    EXPECT_EQ(nameTape.back(), "Guestina");
+    std::vector<SavegameSlot> saves = loadMenuSlots();
+    auto partySave = std::ranges::find(saves, "Co-op - Player", [](const SavegameSlot &slot) { return slot.header.name; });
+    ASSERT_NE(partySave, saves.end());
+    EXPECT_EQ(engine->_lastLoadedSaveFileName, partySave->fileName); // Saving goes back into it.
+}
+
+GAME_TEST(Coop, HostStartsNewGameFromLobby) {
+    // The host makes a party and waits in the lobby, can't start before everyone's party is ready, and then starts a
+    // new game that the guests are welcomed into.
+    auto mapTape = tapes.map();
+    auto lobbyTape = tapes.custom([] { return hasGuiButton("CoopLobby_Start"); });
+    game.goToMainMenu();
     MM_AT_SCOPE_EXIT(coopSession.reset());
     test.startTaping();
 
-    joinFromCoopMenu(game, server, 0);
+    game.pressGuiButton("MainMenu_Coop");
+    game.tick();
+    game.pressGuiButton("CoopMenu_HostNewPage");
+    game.tick();
+    game.pressGuiButton("CoopMenu_Field2"); // The port.
+    game.tick();
+    eraseText(game, 4);
+    typeText(game, "47348");
+    game.tick();
+    game.pressGuiButton("CoopMenu_Host");
+    game.tick(2);
+    game.pressGuiButton("PartyCreation_OK");
+    for (int i = 0; i < 100 && !hasGuiButton("CoopLobby_Start"); i++)
+        game.tick();
+    ASSERT_TRUE(coopSession);
+    CoopClient guest("127.0.0.1", 47348, "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_IN_LOBBY);
 
-    EXPECT_FALSE(coopSession);
-    EXPECT_TRUE(server.remoteParties().empty());
-    EXPECT_EQ(joinPageTape.back(), true); // Still on the join page, with the reason shown.
-    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE); // Back to the main menu, where the test run exits from.
+    game.pressGuiButton("CoopLobby_Start"); // The guest is still making a party.
     game.tick();
-    game.pressAndReleaseKey(PlatformKey::KEY_ESCAPE);
-    game.tick();
+    EXPECT_TRUE(hasGuiButton("CoopLobby_Start"));
+    guest.setReady(true);
+    for (int i = 0; i < 100 && !std::ranges::all_of(coopSession->server()->lobbyPlayers(), &CoopLobbyPlayer::ready); i++) {
+        guest.update();
+        game.tick();
+    }
+    game.pressGuiButton("CoopLobby_Start");
+    for (int i = 0; i < 300 && guest.state() != COOP_CLIENT_JOINED; i++) { // The intro movie and the new world load first.
+        game.tick();
+        guest.update();
+    }
+
+    EXPECT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    EXPECT_TRUE(guest.takeSaveGame());
+    EXPECT_EQ(mapTape.back(), MAP_EMERALD_ISLAND);
+    EXPECT_EQ(lobbyTape, tape(false, true, false));
 }

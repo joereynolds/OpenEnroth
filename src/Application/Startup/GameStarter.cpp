@@ -22,6 +22,7 @@
 #include "Engine/Components/Trace/EngineTraceSimpleRecorder.h"
 #include "Engine/Components/Trace/EngineTraceStateAccessor.h"
 #include "Engine/Components/Control/EngineControlComponent.h"
+#include "Engine/Coop/CoopNetworkComponent.h"
 #include "Engine/Components/Control/EngineController.h"
 #include "Engine/Components/Deterministic/EngineDeterministicComponent.h"
 #include "Engine/Components/Random/EngineRandomComponent.h"
@@ -160,6 +161,7 @@ void GameStarter::initialize() {
     _application->installComponent(std::make_unique<EngineTracePlayer>());
     _application->installComponent(std::make_unique<EngineRandomComponent>());
     _application->installComponent(std::make_unique<KeyboardController>());
+    _application->installComponent(std::make_unique<CoopNetworkComponent>());
     _application->installComponent(std::make_unique<GameWindowHandler>());
     _application->installComponent(std::make_unique<GameTraceHandler>());
     _application->component<EngineRandomComponent>()->setTracing(_options.tracingRng);

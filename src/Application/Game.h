@@ -38,6 +38,7 @@ class Game {
     std::unique_ptr<Menu> _menu;
     DecalBuilder *_decalBuilder = nullptr;
     CoopOptions _coopOptions;
+    std::string_view _nextFsmState = "MainMenu"; // Where the menus pick up once `loop` returns to them.
 };
 
 extern std::unique_ptr<GraphicsImage> gamma_preview_image;  // 506E40

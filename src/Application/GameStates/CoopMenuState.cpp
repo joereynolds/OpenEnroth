@@ -18,6 +18,7 @@
 #include "Engine/Engine.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Coop/CoopProtocol.h"
+#include "Engine/Coop/CoopServer.h"
 #include "Engine/Coop/CoopSession.h"
 #include "Engine/Graphics/Image.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
@@ -28,20 +29,17 @@
 #include "GUI/GUIMessageQueue.h"
 #include "GUI/GUIWindow.h"
 #include "GUI/UI/UIPopup.h"
-#include "GUI/UI/UISaveLoad.h"
 
 #include "Io/KeyboardInputHandler.h"
 #include "Io/Mouse.h"
 
 #include "Utility/String/Format.h"
 
-#include "CoopJoinState.h"
 
 enum class CoopMenuField {
     COOP_MENU_FIELD_NAME = 0,
     COOP_MENU_FIELD_ADDRESS = 1,
     COOP_MENU_FIELD_PORT = 2,
-    COOP_MENU_FIELD_PARTY = 3,
 };
 using enum CoopMenuField;
 
@@ -50,15 +48,15 @@ using enum CoopMenuField;
  */
 enum class CoopMenuPage {
     COOP_MENU_PAGE_CHOOSE,
-    COOP_MENU_PAGE_HOST,
+    COOP_MENU_PAGE_HOST_NEW, // Everyone makes a party in a lobby, then the game starts.
+    COOP_MENU_PAGE_HOST_SAVED, // The host loads a save, friends join with saves of their own.
     COOP_MENU_PAGE_JOIN,
 };
 using enum CoopMenuPage;
 
-static constexpr int FIELD_COUNT = 4;
+static constexpr int FIELD_COUNT = 3;
 static constexpr int FIELD_MAX_LENGTH = 40;
-static constexpr std::array<const char *, FIELD_COUNT> FIELD_LABELS = {"Your name", "Host address", "Port", "Your party"};
-static constexpr char NO_SAVES_TEXT[] = "No saves yet";
+static constexpr std::array<const char *, FIELD_COUNT> FIELD_LABELS = {"Your name", "Host address", "Port"};
 
 static constexpr int PANEL_X = 120;
 static constexpr int PANEL_Y = 110;
@@ -72,10 +70,11 @@ static constexpr int VALUE_X = PANEL_X + 170;
  */
 static std::span<const int> pageFields(CoopMenuPage page) {
     static constexpr std::array<int, 2> HOST_FIELDS = {std::to_underlying(COOP_MENU_FIELD_NAME), std::to_underlying(COOP_MENU_FIELD_PORT)};
-    static constexpr std::array<int, 4> JOIN_FIELDS = {std::to_underlying(COOP_MENU_FIELD_NAME), std::to_underlying(COOP_MENU_FIELD_ADDRESS),
-                                                       std::to_underlying(COOP_MENU_FIELD_PORT), std::to_underlying(COOP_MENU_FIELD_PARTY)};
+    static constexpr std::array<int, 3> JOIN_FIELDS = {std::to_underlying(COOP_MENU_FIELD_NAME), std::to_underlying(COOP_MENU_FIELD_ADDRESS),
+                                                       std::to_underlying(COOP_MENU_FIELD_PORT)};
     switch (page) {
-    case COOP_MENU_PAGE_HOST: return HOST_FIELDS;
+    case COOP_MENU_PAGE_HOST_NEW:
+    case COOP_MENU_PAGE_HOST_SAVED: return HOST_FIELDS;
     case COOP_MENU_PAGE_JOIN: return JOIN_FIELDS;
     default: return {};
     }
@@ -99,27 +98,21 @@ class GUIWindow_CoopMenu : public GUIWindow {
         page = newPage;
         error.clear();
         DeleteButtons();
-        if (page == COOP_MENU_PAGE_JOIN) {
-            partySaves = loadMenuSlots();
-            std::erase_if(partySaves, [](const SavegameSlot &slot) { return slot.fileName == COOP_JOINED_SAVE_FILE_NAME; });
-            std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
-            if (!std::ranges::contains(partySaves, party, &SavegameSlot::fileName))
-                party = partySaves.empty() ? std::string() : partySaves.front().fileName;
-        }
         if (page == COOP_MENU_PAGE_CHOOSE) {
-            CreateButton("CoopMenu_HostPage", {PANEL_X + 20, rowY(0)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowHostPage, 0);
-            CreateButton("CoopMenu_JoinPage", {PANEL_X + 20, rowY(1)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowJoinPage, 0);
-            CreateButton("CoopMenu_Back", {PANEL_X + 20, rowY(2)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Back, 0, INPUT_ACTION_ESCAPE);
+            CreateButton("CoopMenu_HostNewPage", {PANEL_X + 20, rowY(0)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowHostNewPage, 0);
+            CreateButton("CoopMenu_HostPage", {PANEL_X + 20, rowY(1)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowHostPage, 0);
+            CreateButton("CoopMenu_JoinPage", {PANEL_X + 20, rowY(2)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_ShowJoinPage, 0);
+            CreateButton("CoopMenu_Back", {PANEL_X + 20, rowY(3)}, {PANEL_W - 40, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Back, 0, INPUT_ACTION_ESCAPE);
             return;
         }
 
         std::span<const int> fields = pageFields(page);
         for (size_t i = 0; i < fields.size(); i++)
             CreateButton(fmt::format("CoopMenu_Field{}", fields[i]), {PANEL_X, rowY(i)}, {PANEL_W, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_SelectField, fields[i]);
-        if (page == COOP_MENU_PAGE_HOST) {
-            CreateButton("CoopMenu_Host", {PANEL_X + 20, buttonsY()}, {150, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Host, 0);
-        } else {
+        if (page == COOP_MENU_PAGE_JOIN) {
             CreateButton("CoopMenu_Join", {PANEL_X + 20, buttonsY()}, {150, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Join, 0);
+        } else {
+            CreateButton("CoopMenu_Host", {PANEL_X + 20, buttonsY()}, {150, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Host, 0);
         }
         CreateButton("CoopMenu_Back", {PANEL_X + 280, buttonsY()}, {100, ROW_H}, BUTTON_TYPE_NORMAL, 0, UIMSG_CoopMenu_Back, 0);
     }
@@ -136,30 +129,40 @@ class GUIWindow_CoopMenu : public GUIWindow {
             Color color = button->Contains(mousePos) ? colorTable.LaserLemon : colorTable.White;
             DrawText(font, button->rect.topLeft(), color, text, frameRect);
         };
+        auto drawHint = [&](std::string_view line1, std::string_view line2) {
+            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, line1, frameRect);
+            DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, line2, frameRect);
+        };
 
         switch (page) {
         case COOP_MENU_PAGE_CHOOSE:
             DrawText(font, {PANEL_X, PANEL_Y - 35}, colorTable.White, "Multiplayer", frameRect);
-            drawButton("CoopMenu_HostPage", "Host a game");
+            drawButton("CoopMenu_HostNewPage", "Host a new game");
+            drawButton("CoopMenu_HostPage", "Host a saved game");
             drawButton("CoopMenu_JoinPage", "Join a friend's game");
             drawButton("CoopMenu_Back", "Back");
-            DrawText(font, {PANEL_X, buttonsY()}, colorTable.Gray, "One player hosts, the others join.", frameRect);
+            drawHint("One player hosts, the others join.", "");
             break;
-        case COOP_MENU_PAGE_HOST:
-            DrawText(font, {PANEL_X, PANEL_Y - 35}, colorTable.White, "Host a game", frameRect);
+        case COOP_MENU_PAGE_HOST_NEW:
+            DrawText(font, {PANEL_X, PANEL_Y - 35}, colorTable.White, "Host a new game", frameRect);
             drawFields(font);
-            drawButton("CoopMenu_Host", "Start hosting");
+            drawButton("CoopMenu_Host", "Make your party");
             drawButton("CoopMenu_Back", "Back");
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Start or load a game next. Friends join with", frameRect);
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, "your IP address, the port must be open to UDP.", frameRect);
+            drawHint("Everyone makes a party, then you start.", "Friends join with your IP address.");
+            break;
+        case COOP_MENU_PAGE_HOST_SAVED:
+            DrawText(font, {PANEL_X, PANEL_Y - 35}, colorTable.White, "Host a saved game", frameRect);
+            drawFields(font);
+            drawButton("CoopMenu_Host", "Pick the save");
+            drawButton("CoopMenu_Back", "Back");
+            drawHint("Load your game, friends join with their", "saves. Friends join with your IP address.");
             break;
         case COOP_MENU_PAGE_JOIN:
             DrawText(font, {PANEL_X, PANEL_Y - 35}, colorTable.White, "Join a friend's game", frameRect);
             drawFields(font);
             drawButton("CoopMenu_Join", "Join");
             drawButton("CoopMenu_Back", "Back");
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H}, colorTable.Gray, "Click Your party to pick the save to bring.", frameRect);
-            DrawText(font, {PANEL_X, buttonsY() + ROW_H + 20}, colorTable.Gray, "Saving as usual keeps your progress in it.", frameRect);
+            drawHint("You pick your party once connected.", "");
             break;
         }
 
@@ -167,18 +170,7 @@ class GUIWindow_CoopMenu : public GUIWindow {
             DrawText(font, {PANEL_X, buttonsY() + 3 * ROW_H}, colorTable.Red, error, frameRect);
     }
 
-    /**
-     * Selects the next of the guest's saves to bring a party from, going back to the first after the last one.
-     */
-    void chooseNextPartySave() {
-        if (partySaves.empty())
-            return;
-        std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
-        auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
-        party = pos == partySaves.end() || pos + 1 == partySaves.end() ? partySaves.front().fileName : (pos + 1)->fileName;
-    }
-
-    std::array<std::string, FIELD_COUNT> fields = {"Player", "", fmt::format("{}", COOP_DEFAULT_PORT), ""}; // The party is a file name in `saves`.
+    std::array<std::string, FIELD_COUNT> fields = {"Player", "", fmt::format("{}", COOP_DEFAULT_PORT)};
     CoopMenuPage page = COOP_MENU_PAGE_CHOOSE;
     int selected = -1; // Field being typed into, -1 on the choice page.
     std::string error;
@@ -190,15 +182,8 @@ class GUIWindow_CoopMenu : public GUIWindow {
             int field = shown[i];
             Color color = field == selected ? colorTable.LaserLemon : colorTable.White;
             DrawText(font, {PANEL_X, rowY(i)}, color, FIELD_LABELS[field], frameRect);
-            std::string value = field == std::to_underlying(COOP_MENU_FIELD_PARTY) ? partyName() : fields[field] + (field == selected ? "_" : "");
-            DrawText(font, {VALUE_X, rowY(i)}, color, value, frameRect);
+            DrawText(font, {VALUE_X, rowY(i)}, color, fields[field] + (field == selected ? "_" : ""), frameRect);
         }
-    }
-
-    std::string partyName() const {
-        const std::string &party = fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
-        auto pos = std::ranges::find(partySaves, party, &SavegameSlot::fileName);
-        return pos == partySaves.end() ? NO_SAVES_TEXT : pos->header.name;
     }
 
     GUIButton *findButton(std::string_view id) {
@@ -211,11 +196,10 @@ class GUIWindow_CoopMenu : public GUIWindow {
     }
 
     int buttonsY() const {
-        int rows = page == COOP_MENU_PAGE_CHOOSE ? 3 : pageFields(page).size(); // The choice page has three buttons and no fields.
+        int rows = page == COOP_MENU_PAGE_CHOOSE ? 4 : pageFields(page).size(); // The choice page has four buttons and no fields.
         return PANEL_Y + rows * ROW_H + 15;
     }
 
-    std::vector<SavegameSlot> partySaves;
     GraphicsImage *_background = nullptr;
 };
 
@@ -233,10 +217,7 @@ FsmAction CoopMenuState::update() {
         if (_window->keyboard_input_status == WINDOW_INPUT_CONFIRMED) {
             std::span<const int> shown = pageFields(_window->page);
             auto pos = std::ranges::find(shown, _window->selected);
-            int next = shown[(pos - shown.begin() + 1) % shown.size()];
-            if (next == std::to_underlying(COOP_MENU_FIELD_PARTY))
-                next = shown.front(); // The party is picked by clicking, not typed.
-            selectField(next);
+            selectField(shown[(pos - shown.begin() + 1) % shown.size()]);
         } else if (_window->keyboard_input_status == WINDOW_INPUT_NONE) {
             showPage(COOP_MENU_PAGE_CHOOSE); // Escape ends text input, it's the only way to get here.
             return FsmAction::none();
@@ -248,23 +229,28 @@ FsmAction CoopMenuState::update() {
         int param = 0;
         engine->_messageQueue->popMessage(&message, &param, nullptr);
         switch (message) {
+        case UIMSG_CoopMenu_ShowHostNewPage:
+            showPage(COOP_MENU_PAGE_HOST_NEW);
+            break;
         case UIMSG_CoopMenu_ShowHostPage:
-            showPage(COOP_MENU_PAGE_HOST);
+            showPage(COOP_MENU_PAGE_HOST_SAVED);
             break;
         case UIMSG_CoopMenu_ShowJoinPage:
             showPage(COOP_MENU_PAGE_JOIN);
             break;
         case UIMSG_CoopMenu_SelectField:
-            if (param == std::to_underlying(COOP_MENU_FIELD_PARTY)) {
-                _window->chooseNextPartySave();
-            } else {
-                selectField(param);
-            }
+            selectField(param);
             break;
         case UIMSG_CoopMenu_Host:
-            if (host())
-                return FsmAction::transition("back");
-            break;
+            if (!host())
+                break;
+            if (_window->page == COOP_MENU_PAGE_HOST_NEW) {
+                coopSession->server()->openLobby();
+                SetCurrentMenuID(MENU_NEWGAME);
+                return FsmAction::transition("newGame");
+            }
+            SetCurrentMenuID(MENU_SAVELOAD);
+            return FsmAction::transition("loadGame");
         case UIMSG_CoopMenu_Join:
             if (join())
                 return FsmAction::transition("back");
@@ -291,7 +277,7 @@ void CoopMenuState::showPage(CoopMenuPage page) {
     keyboardInputHandler->EndTextInput(_window.get());
     _window->showPage(page);
     _window->selected = -1;
-    if (page == COOP_MENU_PAGE_HOST)
+    if (page == COOP_MENU_PAGE_HOST_NEW || page == COOP_MENU_PAGE_HOST_SAVED)
         selectField(std::to_underlying(COOP_MENU_FIELD_NAME));
     if (page == COOP_MENU_PAGE_JOIN)
         selectField(std::to_underlying(COOP_MENU_FIELD_ADDRESS));
@@ -321,7 +307,7 @@ bool CoopMenuState::host() {
 
     try {
         coopSession.reset();
-        coopSession = CoopSession::host(*port, COOP_MAX_CLIENTS);
+        coopSession = CoopSession::host(*port, COOP_MAX_CLIENTS, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)]);
     } catch (const std::exception &e) {
         _window->error = e.what();
         return false;
@@ -340,16 +326,11 @@ bool CoopMenuState::join() {
         _window->error = "The port has to be a number from 1 to 65535";
         return false;
     }
-    const std::string &party = _window->fields[std::to_underlying(COOP_MENU_FIELD_PARTY)];
-    if (party.empty()) {
-        _window->error = "Make a party with New Game and save it first";
-        return false;
-    }
 
     try {
-        Blob guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", party)));
         coopSession.reset();
-        coopSession = CoopSession::join(address, *port, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)], std::move(guestSave), party);
+        coopSession = CoopSession::join(address, *port, _window->fields[std::to_underlying(COOP_MENU_FIELD_NAME)], Blob());
+        coopSession->choosePartyAfterJoining();
     } catch (const std::exception &e) {
         _window->error = e.what();
         return false;
