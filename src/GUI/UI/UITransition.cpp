@@ -2,6 +2,8 @@
 
 #include <cstdlib>
 #include <string>
+#include <utility>
+#include <string_view>
 
 #include "Engine/Engine.h"
 #include "Engine/AssetsManager.h"
@@ -29,6 +31,7 @@
 #include "Library/Logger/Logger.h"
 
 #include "Utility/String/Ascii.h"
+#include "Utility/String/Format.h"
 
 GraphicsImage *transition_ui_icon = nullptr;
 
@@ -198,4 +201,27 @@ void GUIWindow_IndoorEntryExit::Update() {
     } else {
         MM_ERROR("Troubles in da house");
     }
+}
+
+GUIWindow_CoopVote::GUIWindow_CoopVote(std::string title, std::string question, std::string acceptHint)
+    : GUIWindow_Transition(WINDOW_COOP_VOTE, SCREEN_CHANGE_LOCATION), _title(std::move(title)), _question(std::move(question)) {
+    transition_ui_icon = assets->getIcon("outside");
+    createButtons(acceptHint, "Not now", UIMSG_CoopVoteAccept, UIMSG_CoopVoteDecline);
+}
+
+void GUIWindow_CoopVote::Update() {
+    render->DrawQuad2D(_dialogueBackground, {477, 0});
+    render->DrawQuad2D(game_ui_right_panel_frame, {468, 0});
+    render->DrawQuad2D(transition_ui_icon, {pNPCPortraits_x[0][0], pNPCPortraits_y[0][0]});
+    render->DrawQuad2D(dialogue_ui_x_x_u, {556, 451});
+    render->DrawQuad2D(dialogue_ui_x_ok_u, {476, 451});
+
+    Recti window = pPrimaryWindow->frameRect;
+    window.x = 493;
+    window.w = 126;
+    DrawTitleText(assets->pFontCreate.get(), 0, 4, colorTable.White, _title, 3, window);
+
+    window.x = SIDE_TEXT_BOX_POS_X;
+    window.w = SIDE_TEXT_BOX_WIDTH;
+    DrawTitleText(assets->pFontCreate.get(), 0, (212 - assets->pFontCreate->CalcTextHeight(_question, window.w, 0)) / 2 + 101, colorTable.White, _question, 3, window);
 }

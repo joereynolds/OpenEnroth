@@ -98,6 +98,14 @@ add_subdirectory(generator EXCLUDE_FROM_ALL)
 # lambda2
 add_subdirectory(lambda2)
 
+# enet, its own cmake file neither exports the include dir nor links the winsock libs under msvc.
+add_subdirectory(enet EXCLUDE_FROM_ALL)
+target_include_directories(enet INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/enet/include)
+if(MSVC)
+    target_link_libraries(enet winmm ws2_32) # Keyword-less, to match the signature enet uses for mingw.
+    target_compile_definitions(enet PRIVATE _WINSOCK_DEPRECATED_NO_WARNINGS _CRT_SECURE_NO_WARNINGS)
+endif()
+
 # ztd.text
 set(ZTD_IDK_EXCLUDE_FROM_ALL ON)
 add_subdirectory(ztd_text EXCLUDE_FROM_ALL)

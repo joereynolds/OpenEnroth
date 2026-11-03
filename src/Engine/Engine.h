@@ -10,7 +10,10 @@
 
 #include "Engine/Evt/EvtProgram.h"
 #include "Engine/MapEnums.h"
+#include "Engine/CoopEvents.h"
 #include "Engine/PartyPlacement.h"
+#include "Engine/RemoteParty.h"
+#include "Engine/Objects/SpriteObject.h"
 #include "Engine/mm7_data.h"
 
 #include "Core/Time/Time.h"
@@ -152,6 +155,18 @@ class Engine {
     std::optional<MapDestination> _pendingTransition; // Set while a map change is in flight, consumed by the loaders.
     std::string _lastLoadedSaveFileName; // File name of the last loaded savegame, pre-selected in the save & load menus.
     std::string _pendingLoadFileName; // Savegame to load when the main menu FSM exits into the game loop.
+    std::vector<RemoteParty> _remoteParties; // Other co-op players' parties on the current map.
+    bool _actorsFollowHost = false; // Co-op guest, the monsters do what the host's game says instead of acting on their own.
+    std::vector<ActorHit> _actorHitsForHost; // Co-op guest, damage the local party dealt that the host's game has to deal too.
+    std::vector<StandInHit> _standInHits; // Co-op host, attacks on other players' parties that their games have to take.
+    std::vector<int> _lootRequestsForHost; // Co-op guest, corpses the local party wants to loot, the host decides who gets what.
+    bool _coopSessionActive = false; // A co-op game is running, local changes to the shared world are recorded for the others.
+    std::vector<QuestBitChange> _questBitChanges; // Co-op, quest bits the local party's scripts changed.
+    std::vector<QuestReward> _questRewards; // Co-op, what the local party's scripts gave out for quests.
+    std::vector<int> _changedChests; // Co-op, chests on the current map whose contents the local party changed.
+    std::vector<GroundItemTaken> _takenGroundItems; // Co-op, items the local party picked up from the ground.
+    std::vector<DroppedItem> _droppedItems; // Co-op, items the local party dropped.
+    std::vector<SpriteObject> _launchedSprites; // Co-op, projectiles and spell effects the local party or, on the host, a monster launched.
     OverlaySystem &_overlaySystem;
 
     std::unique_ptr<GUIMessageQueue> _messageQueue;

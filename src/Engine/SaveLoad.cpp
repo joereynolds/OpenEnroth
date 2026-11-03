@@ -229,16 +229,19 @@ void autoSave() {
     saveGame(true, false, fmt::format("saves/{}", autosaveFileName), localization->str(LSTR_AUTOSAVE));
 }
 
+static std::string freeSaveFileName() {
+    for (int i = 0;; i++) {
+        std::string result = fmt::format("save{:03}.mm7", i);
+        if (!ufs->exists(fmt::format("saves/{}", result)))
+            return result;
+    }
+}
+
 void doSavegame(std::string fileName, std::string_view title) {
     assert(engine->_currentLoadedMapId != MAP_ARENA); // Not Arena.
 
-    if (fileName.empty()) {
-        for (int i = 0;; i++) { // New save, pick the first free numbered name.
-            fileName = fmt::format("save{:03}.mm7", i);
-            if (!ufs->exists(fmt::format("saves/{}", fileName)))
-                break;
-        }
-    }
+    if (fileName.empty())
+        fileName = freeSaveFileName();
 
     saveGame(false, false, fmt::format("saves/{}", fileName), title);
 
@@ -250,7 +253,7 @@ void doSavegame(std::string fileName, std::string_view title) {
     engine->_statusBar->setEvent(LSTR_GAME_SAVED);
 }
 
-void saveNewGame() {
+static void placeNewParty() {
     engine->_currentLoadedMapId = MAP_EMERALD_ISLAND;
     engine->_lastLoadedSaveFileName.clear(); // Otherwise the save menu would pre-select a save from a previous playthrough.
     pParty->pos.x = 12552;
@@ -261,8 +264,18 @@ void saveNewGame() {
 
     pParty->_viewPitch = 0;
     pParty->_viewYaw = 512;
+}
 
+void saveNewGame() {
+    placeNewParty();
     saveGame(true, true, fmt::format("saves/{}", autosaveFileName), localization->str(LSTR_AUTOSAVE));
+}
+
+std::string saveNewParty(std::string_view title) {
+    placeNewParty();
+    std::string result = freeSaveFileName();
+    saveGame(false, true, fmt::format("saves/{}", result), title);
+    return result;
 }
 
 void quickSaveGame() {

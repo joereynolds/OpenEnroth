@@ -1,11 +1,17 @@
 #include "OpenEnrothOptions.h"
 
+#include <charconv>
 #include <memory>
+#include <string_view>
+#include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <string>
 
 #include "Application/Startup/PathResolver.h"
+
+#include "Engine/Coop/CoopProtocol.h"
 
 #include "Library/Cli/CliApp.h"
 #include "Library/Environment/Interface/Environment.h"
@@ -13,6 +19,19 @@
 #include "Utility/Exception.h"
 #include "Utility/String/Format.h"
 #include "Utility/System/Fs.h"
+
+static std::pair<std::string, int> parseCoopAddress(std::string_view address) {
+    size_t colon = address.rfind(':');
+    if (colon == std::string_view::npos)
+        return {std::string(address), COOP_DEFAULT_PORT};
+
+    std::string_view portString = address.substr(colon + 1);
+    int port = 0;
+    auto [end, error] = std::from_chars(portString.data(), portString.data() + portString.size(), port);
+    if (error != std::errc() || end != portString.data() + portString.size() || port < 1 || port > 65535)
+        throw Exception("Invalid port in co-op address '{}'.", address);
+    return {std::string(address.substr(0, colon)), port};
+}
 
 OpenEnrothOptions OpenEnrothOptions::parse(int argc, char **argv) {
     // Note that it's OK to create a temporary `Environment` here.
@@ -46,6 +65,22 @@ OpenEnrothOptions OpenEnrothOptions::parse(int argc, char **argv) {
     app->add_flag_callback(
         "-v,--verbose", [&] { result.logLevel = LOG_TRACE; },
         "Set log level to 'trace'.");
+    std::string connect;
+    app->add_option(
+        "--host", result.coop.hostPort,
+        fmt::format("Host a co-op game on the provided port once a game is started or loaded. "
+                    "Port '{}' is the one that '--connect' uses when none is given.", COOP_DEFAULT_PORT))->check(CLI::Range(1, 65535))->option_text("PORT");
+    app->add_option(
+        "--connect", connect,
+        fmt::format("Join the co-op game hosted at the provided address, optionally followed by ':PORT'. "
+                    "Default port is '{}'.", COOP_DEFAULT_PORT))->option_text("ADDRESS");
+    app->add_option(
+        "--name", result.coop.playerName,
+        "Name to show to the other co-op players, default is 'Player'.")->option_text("NAME");
+    app->add_option(
+        "--party", result.coop.partySave,
+        "Save file from the saves folder whose party joins the co-op game, e.g. 'save000.mm7'. "
+        "Without it, a joining player plays a copy of the host's party.")->option_text("SAVE");
     app->set_help_flag("-h,--help", "Print help and exit.");
 
     CLI::App *play = app->add_subcommand("play", "Play provided traces.", result.subcommand, SUBCOMMAND_PLAY)->fallthrough();
@@ -67,6 +102,15 @@ OpenEnrothOptions OpenEnrothOptions::parse(int argc, char **argv) {
     retrace->set_help_flag("-h,--help", "Print help and exit."); // This places --help last in the command list.
 
     app->parse(argc, argv, result.helpPrinted);
+
+    if (!connect.empty())
+        std::tie(result.coop.joinAddress, result.coop.joinPort) = parseCoopAddress(connect);
+    if (result.coop.playerName.empty())
+        result.coop.playerName = "Player";
+    if (result.coop.hostPort && !result.coop.joinAddress.empty())
+        throw Exception("Can't both host and join a co-op game.");
+    if (!result.coop.partySave.empty() && result.coop.joinAddress.empty())
+        throw Exception("A party can only be brought along when joining a co-op game.");
 
     if (!portable && fs::exists(".portable"))
         portable = true;

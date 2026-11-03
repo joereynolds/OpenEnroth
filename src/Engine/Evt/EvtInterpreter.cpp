@@ -156,6 +156,20 @@ static MapDestination moveToMapDestination(const EvtInstruction &ir) {
     return {};
 }
 
+static bool isQuestRewardVariable(EvtVariable variable) {
+    switch (variable) {
+    case VAR_FixedGold:
+    case VAR_RandomGold:
+    case VAR_Experience:
+    case VAR_Award:
+    case VAR_PlayerItemInHands:
+    case VAR_NumSkillPoints:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void EvtInterpreter::prepare(EvtContext context) {
     _context = context;
 
@@ -177,8 +191,10 @@ EvtTransition EvtInterpreter::execute(int startStep) {
 
     _who = !pParty->hasActiveCharacter() ? CHOOSE_RANDOM : CHOOSE_ACTIVE;
 
+    size_t questBitChangesBefore = engine->_questBitChanges.size();
     while (step != -1)
         step = executeStep(step);
+    finishRun(questBitChangesBefore);
 
     return _transition;
 }
@@ -353,8 +369,11 @@ EvtFlow EvtInterpreter::executeInstruction(EvtInstruction ir) {
             if (engine->_currentLoadedMapId == MAP_COLONY_ZOD && _context.eventId == 376 &&
                 ir.data.variable_descr.type == VAR_PlayerItemInHands && pParty->_questBits[QBIT_TALKED_TO_ROLAND])
                 break; // Roland's cage script adds the key on every click, it never checks the quest bit.
-            for (Character &character : iterateCharacters(_who, ir.data.variable_descr.type, grng))
+            for (Character &character : iterateCharacters(_who, ir.data.variable_descr.type, grng)) {
                 addEvtVariable(character, ir.data.variable_descr.type, ir.data.variable_descr.value);
+                if (engine->_coopSessionActive && isQuestRewardVariable(ir.data.variable_descr.type))
+                    _rewards.push_back(QuestReward{ir.data.variable_descr.type, ir.data.variable_descr.value, character.characterIndex()});
+            }
             break;
         case EVENT_Subtract: {
             if (!validateVariableValue(ir))
@@ -713,4 +732,10 @@ bool EvtInterpreter::validateVariableValue(const EvtInstruction &ir) const {
 const EvtInstruction *EvtInterpreter::instructionAt(int step) const {
     auto pos = std::ranges::find(_events, step, &EvtInstruction::step);
     return pos == _events.end() ? nullptr : &*pos;
+}
+
+void EvtInterpreter::finishRun(size_t questBitChangesBefore) {
+    if (engine->_questBitChanges.size() > questBitChangesBefore) // Rewards from a fountain or a barrel aren't shared.
+        engine->_questRewards.insert(engine->_questRewards.end(), _rewards.begin(), _rewards.end());
+    _rewards.clear();
 }

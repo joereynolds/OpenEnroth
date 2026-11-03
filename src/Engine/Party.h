@@ -133,6 +133,16 @@ struct Party {
     void placeHeldItemInInventoryOrDrop();
     void dropHeldItem();
 
+    /**
+     * Throws an item into the world the way the party drops the item on the cursor.
+     *
+     * @param item                      Item to throw.
+     * @param pos                       Where it starts, the party drops items from eye level.
+     * @param yaw                       Which way it flies.
+     * @param sectorId                  Indoor sector `pos` is in, zero outdoors.
+     */
+    static void dropItem(const Item &item, const Vec3f &pos, int yaw, int sectorId);
+
     int GetGold() const;
     void SetGold(int amount, bool silent = false);
     void AddGold(int amount);

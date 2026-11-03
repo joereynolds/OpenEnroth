@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,6 +17,9 @@
 #include "Engine/EngineCallObserver.h"
 #include "Engine/EngineGlobals.h"
 #include "Engine/Interaction.h"
+#include "Engine/Coop/CoopClient.h"
+#include "Engine/Coop/CoopServer.h"
+#include "Engine/Coop/CoopSession.h"
 #include "Engine/Data/AwardEnums.h"
 #include "Engine/Data/HouseEnumFunctions.h"
 #include "Engine/Evt/Processor.h"
@@ -25,6 +29,7 @@
 #include "Engine/Graphics/Lighting.h"
 #include "Engine/Graphics/Renderer/Renderer.h"
 #include "Engine/Objects/Decoration.h"
+#include "Engine/Resources/EngineFileSystem.h"
 #include "Engine/Graphics/Outdoor.h"
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Graphics/Overlays.h"
@@ -45,6 +50,7 @@
 #include "Engine/Random/Random.h"
 #include "Engine/Spells/CastSpellInfo.h"
 #include "Engine/Spells/SpellEnumFunctions.h"
+#include "Engine/Spells/Spells.h"
 #include "Engine/Timer.h"
 #include "Engine/TurnEngine/TurnEngine.h"
 #include "Engine/MapEnumFunctions.h"
@@ -114,9 +120,10 @@ static void setMinimapZoom(int zoom) {
     viewparams->uMinimapZoom = zoom;
 }
 
-Game::Game(PlatformApplication *application, std::shared_ptr<GameConfig> config) {
+Game::Game(PlatformApplication *application, std::shared_ptr<GameConfig> config, CoopOptions coopOptions) {
     _application = application;
     _config = config;
+    _coopOptions = std::move(coopOptions);
     _menu = std::make_unique<Menu>();
     _decalBuilder = EngineIocContainer::ResolveDecalBuilder();
 }
@@ -126,6 +133,26 @@ Game::~Game() = default;
 int Game::run() {
     window->activate();
     ::eventLoop->processMessages(eventHandler);
+
+    if (_coopOptions.hostPort) {
+        try {
+            coopSession = CoopSession::host(*_coopOptions.hostPort, COOP_MAX_CLIENTS, _coopOptions.playerName);
+            MM_INFO("Hosting co-op game on port {}", *_coopOptions.hostPort);
+        } catch (const std::exception &e) {
+            MM_ERROR("Could not host co-op game on port {}: {}", *_coopOptions.hostPort, e.what());
+        }
+    }
+
+    if (!_coopOptions.joinAddress.empty()) {
+        try {
+            Blob guestSave;
+            if (!_coopOptions.partySave.empty())
+                guestSave = Blob::copy(ufs->read(fmt::format("saves/{}", _coopOptions.partySave)));
+            coopSession = CoopSession::join(_coopOptions.joinAddress, _coopOptions.joinPort, _coopOptions.playerName, std::move(guestSave), _coopOptions.partySave);
+        } catch (const std::exception &e) {
+            MM_ERROR("Could not join co-op game at '{}:{}': {}", _coopOptions.joinAddress, _coopOptions.joinPort, e.what());
+        }
+    }
 
     std::string_view startingState = "Start";
     // Need to have this do/while external loop till we remove entirely all the states
@@ -138,6 +165,9 @@ int Game::run() {
                 render->BeginScene2D();
 
                 fsm->update();
+
+                if (coopSession && coopSession->server())
+                    coopSession->server()->update(); // Turns joining players away until a game is running.
 
                 // This method should be interpreted as a future RetainedUISystem::update()
                 // It does update all the GUIWindow alive + it does various hacks
@@ -155,9 +185,11 @@ int Game::run() {
         if (!loop()) {
             break;
         } else {
-            startingState = "MainMenu";
+            startingState = std::exchange(_nextFsmState, "MainMenu");
         }
     } while (true);
+
+    coopSession.reset();
 
     // Clean up primary window should be the only one left now
     assert(lWindowList.size() == 1);
@@ -180,10 +212,28 @@ bool Game::loop() {
                 continue;
             }
             break;
-        } else if (GetCurrentMenuID() == MENU_NEWGAME) {
-            pActiveOverlayList->Reset();
-            if (!PartyCreationUI_Loop()) {
-                break;
+        } else if (GetCurrentMenuID() == MENU_NEWGAME || GetCurrentMenuID() == MENU_COOP_START_NEW_GAME) {
+            bool coopLobby = coopSession && (coopSession->client() ? coopSession->choosesParty() : coopSession->server()->isLobbyOpen());
+            if (GetCurrentMenuID() == MENU_NEWGAME) {
+                pActiveOverlayList->Reset();
+                if (!PartyCreationUI_Loop()) {
+                    if (coopLobby)
+                        coopSession.reset(); // Backing out of party creation leaves the co-op game being set up.
+                    break;
+                }
+
+                pParty->pPickedItem.itemId = ITEM_NULL;
+                if (coopLobby) {
+                    if (coopSession->client()) {
+                        std::string fileName = saveNewParty(fmt::format("Co-op - {}", coopSession->playerName()));
+                        coopSession->setGuestSave(Blob::copy(ufs->read(fmt::format("saves/{}", fileName))), fileName);
+                        coopSession->client()->setReady(true);
+                    } else {
+                        coopSession->server()->setHostReady(true);
+                    }
+                    _nextFsmState = "CoopLobby"; // Waits for everyone's party, the host starts the game from there.
+                    break;
+                }
             }
 
             pParty->pPickedItem.itemId = ITEM_NULL;
@@ -765,6 +815,14 @@ void Game::processQueuedMessages() {
                 }
                 continue;
             }
+            case UIMSG_CoopVoteAccept:
+            case UIMSG_CoopVoteDecline:
+                PlayButtonClickSound();
+                DialogueEnding();
+                current_screen_type = SCREEN_GAME;
+                if (coopSession)
+                    coopSession->answerVote(uMessage == UIMSG_CoopVoteAccept);
+                continue;
             case UIMSG_CancelTravelByFoot:
                 PlayButtonClickSound();
                 pParty->pos.x = std::clamp(pParty->pos.x, -maxPartyAxisDistance, maxPartyAxisDistance);
@@ -1112,6 +1170,8 @@ void Game::processQueuedMessages() {
                 pParty->activeCharacter().playReaction(SPEECH_CANT_REST_HERE);
                 continue;
             case UIMSG_Rest8Hour:
+                if (coopSession && currentRestType == REST_NONE && coopSession->interceptRest())
+                    continue;
                 if (currentRestType != REST_NONE) {
                     engine->_statusBar->setEvent(LSTR_YOU_ARE_ALREADY_RESTING);
                     pAudioPlayer->playUISound(SOUND_error);
@@ -1483,6 +1543,23 @@ void Game::processQueuedMessages() {
 }
 
 //----- (0046A14B) --------------------------------------------------------
+void Game::showCoopVote() {
+    bool voteWindowOpen = pDialogueWindow && pDialogueWindow->eWindowType == WINDOW_COOP_VOTE;
+    const std::optional<CoopVote> &vote = coopSession->pendingVote();
+    if (vote && !voteWindowOpen && !pDialogueWindow && current_screen_type == SCREEN_GAME) {
+        if (vote->kind == COOP_VOTE_REST) {
+            pDialogueWindow = std::make_unique<GUIWindow_CoopVote>("Rest", fmt::format("{} wants the group to rest for eight hours.\n \nDo you agree?", vote->proposerName), "Rest");
+        } else {
+            std::string mapName = pMapTable->pInfos[vote->destination.map()].name;
+            pDialogueWindow = std::make_unique<GUIWindow_CoopVote>(mapName, fmt::format("{} wants the group to travel to {}.\n \nDo you agree?", vote->proposerName, mapName),
+                                                                   fmt::format("Travel to {}", mapName));
+        }
+    } else if (!vote && voteWindowOpen) { // Someone else refused before the local player answered.
+        DialogueEnding();
+        current_screen_type = SCREEN_GAME;
+    }
+}
+
 void Game::onPressSpace() {
     Pid pid = engine->PickKeyboard(engine->config->gameplay.KeyboardInteractionDepth.value(),
                                     &vis_decoration_noevent_filter, &vis_door_filter).pid;
@@ -1501,6 +1578,8 @@ void Game::gameLoop() {
         uGameState = GAME_STATE_PLAYING;
         assert(!engine->_pendingLoadFileName.empty());
         loadGame(std::exchange(engine->_pendingLoadFileName, {}));
+        if (coopSession && coopSession->client())
+            engine->_lastLoadedSaveFileName = coopSession->guestSaveFileName(); // What the save menu pre-selects.
     }
 
     extern bool use_music_folder;
@@ -1565,12 +1644,26 @@ void Game::gameLoop() {
                 if (engineFlags & ENGINE_SKIP_NEXT_WORLD_UPDATE) {
                     engineFlags &= ~ENGINE_SKIP_NEXT_WORLD_UPDATE;
                 } else {
-                    Actor::UpdateActorAI();
+                    if (!engine->_actorsFollowHost) {
+                        Actor::UpdateActorAI();
+                    } else if (uCurrentlyLoadedLevelType != LEVEL_INDOOR && pParty->armageddon_timer) {
+                        armageddonProgress(); // The monster AI update that drives Armageddon doesn't run on a co-op guest.
+                    }
                     UpdateUserInput_and_MapSpecificStuff();
                 }
             }
 
             pAudioPlayer->UpdateSounds();
+
+            if (coopSession) {
+                coopSession->update();
+                if (coopSession->client() && coopSession->client()->state() == COOP_CLIENT_FAILED) {
+                    engine->_statusBar->setEvent(fmt::format("Lost the co-op game: {}. You're playing alone now.", coopSession->client()->failureReason()));
+                    coopSession.reset();
+                } else {
+                    showCoopVote();
+                }
+            }
 
             GameUI_WritePointedObjectStatusString();
             engine->_statusBar->update();
@@ -1578,6 +1671,11 @@ void Game::gameLoop() {
 
             if (uGameState == GAME_STATE_PLAYING) {
                 engine->Draw();
+                continue;
+            }
+
+            if (uGameState == GAME_STATE_CHANGE_LOCATION && coopSession && coopSession->interceptMapChange()) {
+                uGameState = GAME_STATE_PLAYING;
                 continue;
             }
 

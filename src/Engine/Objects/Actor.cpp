@@ -2033,13 +2033,24 @@ void Actor::AI_Pursue3(unsigned int uActorID, Pid a2,
 }
 
 //----- (00401221) --------------------------------------------------------
+std::optional<unsigned> Actor::partyDetectionRange() {
+    MonsterHostility relation;
+    if (ActorEnemy() && !buffs[ACTOR_BUFF_ENSLAVED].Active() && !buffs[ACTOR_BUFF_CHARM].Active() && !buffs[ACTOR_BUFF_SUMMONED].Active()) {
+        relation = HOSTILITY_LONG;
+    } else {
+        relation = GetActorsRelation(0);
+    }
+    if (relation == HOSTILITY_FRIENDLY)
+        return std::nullopt;
+    return monsterInfo.hostilityType == HOSTILITY_FRIENDLY ? _4DF380_hostilityRanges[relation] : _4DF380_hostilityRanges[HOSTILITY_LONG];
+}
+
 void Actor::_SelectTarget(unsigned int uActorID, Pid *OutTargetPID,
                           bool can_target_party) {
     int v5;                     // ecx@1
     MonsterHostility v10;             // eax@13
     unsigned v11;                   // ebx@16
     unsigned v12;                   // eax@16
-    MonsterHostility v14;             // eax@31
     unsigned v15;                   // edi@43
     //unsigned v16;                   // ebx@45
     //unsigned v17;                   // eax@45
@@ -2063,6 +2074,21 @@ void Actor::_SelectTarget(unsigned int uActorID, Pid *OutTargetPID,
             actor->aiState == Removed || actor->aiState == Summoned ||
             actor->aiState == Disabled || uActorID == i)
             continue;
+
+        if (actor->attributes & ACTOR_COOP_STAND_IN) {
+            // Another player's party, it's chosen by the same rules as the local one below.
+            std::optional<unsigned> range = thisActor->partyDetectionRange();
+            if (!can_target_party || !range)
+                continue;
+            unsigned dx = std::abs(thisActor->pos.x - actor->pos.x);
+            unsigned dy = std::abs(thisActor->pos.y - actor->pos.y);
+            unsigned dz = std::abs(thisActor->pos.z - actor->pos.z);
+            if (dx <= *range && dy <= *range && dz <= *range && dx * dx + dy * dy + dz * dz < lowestRadius) {
+                lowestRadius = dx * dx + dy * dy + dz * dz;
+                closestId = i;
+            }
+            continue;
+        }
 
         if (!thisActor->lastCharacterIdToHit || Pid(OBJECT_Actor, v5) != thisActor->lastCharacterIdToHit) {
             v10 = thisActor->GetActorsRelation(actor);
@@ -2098,18 +2124,8 @@ void Actor::_SelectTarget(unsigned int uActorID, Pid *OutTargetPID,
     }
 
     if (can_target_party && !pParty->Invisible()) {
-        if (thisActor->ActorEnemy() &&
-            !thisActor->buffs[ACTOR_BUFF_ENSLAVED].Active() &&
-            !thisActor->buffs[ACTOR_BUFF_CHARM].Active() &&
-            !thisActor->buffs[ACTOR_BUFF_SUMMONED].Active())
-            v14 = HOSTILITY_LONG;
-        else
-            v14 = thisActor->GetActorsRelation(0);
-        if (v14 != HOSTILITY_FRIENDLY) {
-            if (thisActor->monsterInfo.hostilityType == HOSTILITY_FRIENDLY)
-                v15 = _4DF380_hostilityRanges[v14];
-            else
-                v15 = _4DF380_hostilityRanges[HOSTILITY_LONG];
+        if (std::optional<unsigned> range = thisActor->partyDetectionRange()) {
+            v15 = *range;
             unsigned v16 = std::abs(thisActor->pos.x - pParty->pos.x);
             unsigned v28 = std::abs(thisActor->pos.y - pParty->pos.y);
             unsigned v17 = std::abs(thisActor->pos.z - pParty->pos.z);
@@ -2283,6 +2299,11 @@ void Actor::ActorDamageFromMonster(Pid attacker_id,
         v4 = pSpriteObjects[attacker_id.id()]
                  .field_60_distance_related_prolly_lod;
         attacker_id = pSpriteObjects[attacker_id.id()].spell_caster_pid;
+    }
+    if (pActors[actor_id].attributes & ACTOR_COOP_STAND_IN) {
+        if (attacker_id.type() == OBJECT_Actor)
+            engine->_standInHits.push_back(StandInHit{static_cast<int>(actor_id), attacker_id.id(), a4}); // The guest's game rolls it against its party.
+        return;
     }
     if (attacker_id.type() == OBJECT_Actor) {
         if (!pActors[actor_id].IsNotAlive()) {
@@ -2489,7 +2510,7 @@ void Actor::UpdateActorAI() {
 
         // Skip actor if: Dead / Removed / Disabled / or in full ai state
         if (pActor->aiState == Dead || pActor->aiState == Removed ||
-            pActor->aiState == Disabled || pActor->attributes & ACTOR_FULL_AI_STATE)
+            pActor->aiState == Disabled || pActor->attributes & (ACTOR_FULL_AI_STATE | ACTOR_COOP_STAND_IN))
             continue;
 
         // Kill actor if HP == 0
@@ -2974,6 +2995,7 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
     Character *character = &pParty->pCharacters[a1.id()];
     pMonster = &pActors[uActorID_Monster];
     if (pMonster->IsNotAlive()) return 0;
+    if (pMonster->attributes & ACTOR_COOP_STAND_IN) return 0; // Another co-op player's party, parties don't hurt each other.
 
     pMonster->attributes |= ACTOR_NEARBY | ACTOR_ACTIVE;
     if (pMonster->aiState == Fleeing) pMonster->attributes |= ACTOR_FLEEING;
@@ -3148,6 +3170,9 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
         }
     }
     pMonster->hp -= uDamageAmount;
+    ActorHit *hostHit = nullptr; // Co-op guest, what the host's game has to deal to its copy of the monster.
+    if (engine->_actorsFollowHost && (uDamageAmount != 0 || hit_will_stun))
+        hostHit = &engine->_actorHitsForHost.emplace_back(ActorHit{static_cast<int>(uActorID_Monster), static_cast<int>(uDamageAmount)});
     if (uDamageAmount == 0 && !hit_will_stun) {
         character->playReaction(SPEECH_ATTACK_MISS);
         return 0;
@@ -3187,6 +3212,8 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
         if (!pParty->bTurnBasedModeOn)
             extraRecoveryTime = debug_combat_recovery_mul * flt_debugrecmod3 * 20_ticks;
         pMonster->monsterInfo.recoveryTime += extraRecoveryTime;
+        if (hostHit)
+            hostHit->extraRecovery += extraRecoveryTime;
         if (engine->config->settings.ShowHits.value()) {
             engine->_statusBar->setEvent(LSTR_S_STUNS_S, character->name, pMonster->GetDisplayName());
         }
@@ -3209,6 +3236,8 @@ int Actor::DamageMonsterFromParty(Pid a1, unsigned int uActorID_Monster, const V
     if (knockbackValue > 10) knockbackValue = 10;
     if (supertypeForMonsterId(pMonster->monsterInfo.id) != MONSTER_SUPERTYPE_TREANT) {
         pMonster->velocity = 50 * knockbackValue * pVelocity;
+        if (hostHit)
+            hostHit->knockback = pMonster->velocity;
     }
     Actor::AddOnDamageOverlay(uActorID_Monster, 1, v61);
 
@@ -3497,25 +3526,55 @@ void StatusBarItemFound(int num_gold_found, std::string_view item_unidentified_n
 
 
 //----- (00426A5A) --------------------------------------------------------
+void PartyLootReceiver::receiveGold(int gold) {
+    pParty->partyFindsGold(gold, GOLD_RECEIVE_SHARE);
+}
+
+void PartyLootReceiver::receiveFoundItem(int gold, const Item &item) {
+    Item copy = item;
+    StatusBarItemFound(gold, pItemTable->items[copy.itemId].unidentifiedName);
+    if (!pParty->addItemToParty(&copy))
+        pParty->setHoldingItem(copy);
+}
+
+bool PartyLootReceiver::receiveExtraItem(const Item &item) {
+    Item copy = item;
+    if (pParty->addItemToParty(&copy))
+        return true;
+    pParty->placeHeldItemInInventoryOrDrop();
+    pParty->setHoldingItem(copy);
+    return false;
+}
+
 void Actor::LootActor() {
+    if (engine->_actorsFollowHost) {
+        engine->_lootRequestsForHost.push_back(id); // The host's game owns the corpse and hands out what's on it.
+        return;
+    }
+
+    pParty->placeHeldItemInInventoryOrDrop();
+    PartyLootReceiver receiver;
+    lootInto(&receiver);
+}
+
+void Actor::lootInto(LootReceiver *receiver) {
     Item Dst;         // [sp+Ch] [bp-2Ch]@1
     bool itemFound;      // [sp+30h] [bp-8h]@1
 
-    pParty->placeHeldItemInInventoryOrDrop();
     Dst.Reset();
     itemFound = false;
     int foundGold = 0;
     if (!ActorHasItem()) {
         foundGold = grng->randomDice(this->monsterInfo.goldDiceRolls, this->monsterInfo.goldDiceSides);
         if (foundGold) {
-            pParty->partyFindsGold(foundGold, GOLD_RECEIVE_SHARE);
+            receiver->receiveGold(foundGold);
         }
     } else {
         if (this->items[3].isGold()) {
             foundGold = this->items[3].goldAmount;
             this->items[3].Reset();
             if (foundGold) {
-                pParty->partyFindsGold(foundGold, GOLD_RECEIVE_SHARE);
+                receiver->receiveGold(foundGold);
             }
         }
     }
@@ -3523,25 +3582,14 @@ void Actor::LootActor() {
         Dst.Reset();
         Dst.itemId = this->carriedItemId;
         Dst.postGenerate(ITEM_SOURCE_MONSTER);
-
-        StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-        if (!pParty->addItemToParty(&Dst)) {
-            pParty->setHoldingItem(Dst);
-        }
+        receiver->receiveFoundItem(foundGold, Dst);
         this->carriedItemId = ITEM_NULL;
         if (this->items[0].itemId != ITEM_NULL) {
-            if (!pParty->addItemToParty(&this->items[0])) {
-                pParty->placeHeldItemInInventoryOrDrop();
-                pParty->setHoldingItem(this->items[0]);
-            }
+            receiver->receiveExtraItem(this->items[0]);
             this->items[0].Reset();
         }
         if (this->items[1].itemId != ITEM_NULL) {
-            if (!pParty->addItemToParty(&this->items[1])) {
-                pParty->placeHeldItemInInventoryOrDrop();
-                pParty->setHoldingItem(this->items[1]);
-            }
+            receiver->receiveExtraItem(this->items[1]);
             this->items[1].Reset();
         }
         this->Remove();
@@ -3551,40 +3599,24 @@ void Actor::LootActor() {
         if (this->items[3].itemId != ITEM_NULL) {
             Dst = this->items[3];
             this->items[3].Reset();
-
-            StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-            if (!pParty->addItemToParty(&Dst)) {
-                pParty->setHoldingItem(Dst);
-            }
+            receiver->receiveFoundItem(foundGold, Dst);
             itemFound = true;
         }
     } else {
         if (grng->random(100) < this->monsterInfo.treasureDropChance && this->monsterInfo.treasureLevel != ITEM_TREASURE_LEVEL_INVALID) {
             pItemTable->generateItem(this->monsterInfo.treasureLevel, this->monsterInfo.treasureType, &Dst);
-
-            StatusBarItemFound(foundGold, pItemTable->items[Dst.itemId].unidentifiedName);
-
-            if (!pParty->addItemToParty(&Dst)) {
-                pParty->setHoldingItem(Dst);
-            }
+            receiver->receiveFoundItem(foundGold, Dst);
             itemFound = true;
         }
     }
     if (this->items[0].itemId != ITEM_NULL) {
-        if (!pParty->addItemToParty(&this->items[0])) {
-            pParty->placeHeldItemInInventoryOrDrop();
-            pParty->setHoldingItem(this->items[0]);
+        if (!receiver->receiveExtraItem(this->items[0]))
             itemFound = true;
-        }
         this->items[0].Reset();
     }
     if (this->items[1].itemId != ITEM_NULL) {
-        if (!pParty->addItemToParty(&this->items[1])) {
-            pParty->placeHeldItemInInventoryOrDrop();
-            pParty->setHoldingItem(this->items[1]);
+        if (!receiver->receiveExtraItem(this->items[1]))
             itemFound = true;
-        }
         this->items[1].Reset();
     }
     if (!itemFound || grng->random(100) < 90) {  // for repeatedly get gold and item
@@ -3854,14 +3886,26 @@ void toggleActorGroupFlag(unsigned int uGroupID, ActorAttribute uFlag,
 }
 
 //----- (004014E6) --------------------------------------------------------
+/**
+ * @return                              Indices of the actors that stand in for other co-op players' parties.
+ */
+static std::vector<int> coopStandIns() {
+    std::vector<int> result;
+    for (int i = 0; i < std::ssize(pActors); i++)
+        if ((pActors[i].attributes & ACTOR_COOP_STAND_IN) && pActors[i].aiState != Removed)
+            result.push_back(i);
+    return result;
+}
+
 void Actor::MakeActorAIList_ODM() {
     std::vector<std::pair<int, int>> activeActorsDistances; // pair<id, distance>
+    std::vector<int> standIns = coopStandIns();
 
     pParty->uFlags &= ~PARTY_FLAG_ALERT_RED_OR_YELLOW;
 
     for (Actor &actor : pActors) {
         actor.ResetFullAiState();
-        if (!actor.CanAct()) {
+        if (!actor.CanAct() || (actor.attributes & ACTOR_COOP_STAND_IN)) {
             actor.ResetActive();
             continue;
         }
@@ -3875,7 +3919,11 @@ void Actor::MakeActorAIList_ODM() {
         if (distance < 0)
             distance = 0;
 
-        if (distance < 5632) {
+        int partyDistance = distance; // To the closest party, the local one or another co-op player's.
+        for (int standIn : standIns)
+            partyDistance = std::min(partyDistance, std::max(0, Vec3i((pActors[standIn].pos - actor.pos).toInt()).octagonalLength() - actor.radius));
+
+        if (partyDistance < 5632) {
             actor.ResetHostile();
             if (actor.ActorEnemy() || actor.GetActorsRelation(0) != HOSTILITY_FRIENDLY) {
                 actor.attributes |= ACTOR_HOSTILE;
@@ -3885,7 +3933,7 @@ void Actor::MakeActorAIList_ODM() {
                     pParty->SetRedAlert();
             }
             actor.attributes |= ACTOR_ACTIVE;
-            activeActorsDistances.push_back({actor.id, distance});
+            activeActorsDistances.push_back({actor.id, partyDistance});
         } else {
             actor.ResetActive();
         }
@@ -3909,6 +3957,7 @@ void Actor::MakeActorAIList_ODM() {
 int Actor::MakeActorAIList_BLV() {
     std::vector<std::pair<int, int>> activeActorsDistances; // pair<id, distance>
     std::vector<int> pickedActorIds;
+    std::vector<int> standIns = coopStandIns();
 
     // reset party alert level
     pParty->uFlags &= ~PARTY_FLAG_ALERT_RED_OR_YELLOW;
@@ -3916,7 +3965,7 @@ int Actor::MakeActorAIList_BLV() {
     // find actors that are in range and can act
     for (Actor &actor : pActors) {
         actor.ResetFullAiState();
-        if (!actor.CanAct()) {
+        if (!actor.CanAct() || (actor.attributes & ACTOR_COOP_STAND_IN)) {
             actor.ResetActive();
             continue;
         }
@@ -3929,8 +3978,12 @@ int Actor::MakeActorAIList_BLV() {
         if (distance < 0)
             distance = 0;
 
+        int partyDistance = distance; // To the closest party, the local one or another co-op player's.
+        for (int standIn : standIns)
+            partyDistance = std::min(partyDistance, std::max(0, static_cast<int>((pActors[standIn].pos - actor.pos).length()) - actor.radius));
+
         // actor is in range
-        if (distance < 10240) {
+        if (partyDistance < 10240) {
             actor.ResetHostile();
             if (actor.ActorEnemy() || actor.GetActorsRelation(0) != HOSTILITY_FRIENDLY) {
                 actor.attributes |= ACTOR_HOSTILE;
@@ -3939,7 +3992,7 @@ int Actor::MakeActorAIList_BLV() {
                 if (!(pParty->GetYellowAlert()) && distance < 5120)
                     pParty->SetYellowAlert();
             }
-            activeActorsDistances.push_back({actor.id, distance});
+            activeActorsDistances.push_back({actor.id, partyDistance});
         } else {
             // otherwise idle
             actor.ResetActive();
@@ -3952,7 +4005,10 @@ int Actor::MakeActorAIList_BLV() {
 
     // checks nearby actors can detect player and take nearest 30
     for (const auto &[actorId, _] : activeActorsDistances) {
-        if (pActors[actorId].ActorNearby() || Detect_Between_Objects(Pid(OBJECT_Actor, actorId), Pid(OBJECT_Character, 0))) {
+        bool seesStandIn = std::ranges::any_of(standIns, [&](int standIn) {
+            return Detect_Between_Objects(Pid(OBJECT_Actor, actorId), Pid(OBJECT_Actor, standIn));
+        });
+        if (pActors[actorId].ActorNearby() || Detect_Between_Objects(Pid(OBJECT_Actor, actorId), Pid(OBJECT_Character, 0)) || seesStandIn) {
             pActors[actorId].attributes |= ACTOR_NEARBY;
             pickedActorIds.push_back(actorId);
             if (pickedActorIds.size() >= 30) {
@@ -3963,7 +4019,9 @@ int Actor::MakeActorAIList_BLV() {
 
     // add any actors than can act and are in the same sector
     for (int i = 0; i < pActors.size(); ++i) {
-        if (pActors[i].CanAct() && pActors[i].sectorId == pBLVRenderParams->uPartySectorID) {
+        bool sharesSectorWithStandIn = std::ranges::any_of(standIns, [&](int standIn) { return pActors[standIn].sectorId == pActors[i].sectorId; });
+        if (pActors[i].CanAct() && !(pActors[i].attributes & ACTOR_COOP_STAND_IN) &&
+            (pActors[i].sectorId == pBLVRenderParams->uPartySectorID || sharesSectorWithStandIn)) {
             auto found = std::find_if(pickedActorIds.begin(), pickedActorIds.end(), [&] (int id) { return id == i; });
             if (found == pickedActorIds.end()) {
                 pActors[i].attributes |= ACTOR_ACTIVE;

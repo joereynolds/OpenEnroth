@@ -906,19 +906,26 @@ void Party::dropHeldItem() {
         return;
     }
 
-    SpriteObject sprite;
-    sprite.spriteId = pItemTable->items[pPickedItem.itemId].spriteId;
-    sprite.uObjectDescID = pObjectTable->ObjectIDByItemID(sprite.spriteId);
-    sprite.spell_caster_pid = Pid(OBJECT_Character, 0);
-    sprite.vPosition = pos + Vec3f(0, 0, eyeLevel);
-    sprite.uFacing = 0;
-    sprite.uAttributes = SPRITE_DROPPED_BY_PLAYER;
-    sprite.uSectorID = pBLVRenderParams->uPartyEyeSectorID;
-    sprite.timeSinceCreated = 0_ticks;
-    sprite.containing_item = pPickedItem;
-    sprite.Create(_viewYaw, 184, 200, 0);
+    Vec3f dropPos = pos + Vec3f(0, 0, eyeLevel);
+    dropItem(pPickedItem, dropPos, _viewYaw, pBLVRenderParams->uPartyEyeSectorID);
+    if (engine->_coopSessionActive) // The other co-op players see the item land in their games too.
+        engine->_droppedItems.push_back(DroppedItem{pPickedItem, dropPos, _viewYaw});
 
     pParty->takeHoldingItem();
+}
+
+void Party::dropItem(const Item &item, const Vec3f &pos, int yaw, int sectorId) {
+    SpriteObject sprite;
+    sprite.spriteId = pItemTable->items[item.itemId].spriteId;
+    sprite.uObjectDescID = pObjectTable->ObjectIDByItemID(sprite.spriteId);
+    sprite.spell_caster_pid = Pid(OBJECT_Character, 0);
+    sprite.vPosition = pos;
+    sprite.uFacing = 0;
+    sprite.uAttributes = SPRITE_DROPPED_BY_PLAYER;
+    sprite.uSectorID = sectorId;
+    sprite.timeSinceCreated = 0_ticks;
+    sprite.containing_item = item;
+    sprite.Create(yaw, 184, 200, 0);
 }
 
 void Party::placeHeldItemInInventoryOrDrop() {

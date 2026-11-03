@@ -577,6 +577,7 @@ class GameConfig : public Config {
         Key Controls = {this, INPUT_ACTION_OPEN_CONTROLS, "controls", PlatformKey::KEY_C, "Controls change menu key."};
         Key Options = {this, INPUT_ACTION_OPEN_OPTIONS, "options", PlatformKey::KEY_O, "Options menu key."};
         Key Credits = {this, INPUT_ACTION_SHOW_CREDITS, "credits", PlatformKey::KEY_C, "Credits menu key."};
+        Key CoopMenu = {this, INPUT_ACTION_COOP_MENU, "coop_menu", PlatformKey::KEY_P, "Co-op menu key."};
         Key Clear = {this, INPUT_ACTION_PARTY_CREATION_CLEAR, "clear", PlatformKey::KEY_C, "Clear button in New Party Creation menu."};
         Key Return = {this, INPUT_ACTION_PARTY_CREATION_DONE, "return", PlatformKey::KEY_RETURN, "Ok button in New Party Creation menu."};
         Key Minus = {this, INPUT_ACTION_PARTY_CREATION_DEC, "minus", PlatformKey::KEY_SUBTRACT, "Minus button in New Party Creation menu."};

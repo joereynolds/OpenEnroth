@@ -17,5 +17,7 @@ void pushMeleeAttack(Pid pid, Vec3f pos, ActorAbility ability) {
 }
 
 void pushAoeAttack(Pid pid, float aoeDistance, Vec3f pos, ActorAbility ability) {
+    if (pid.type() == OBJECT_Sprite && pSpriteObjects[pid.id()].isCoopRemote)
+        return;
     attackList.push_back({pid, pos, aoeDistance, false, ability});
 }

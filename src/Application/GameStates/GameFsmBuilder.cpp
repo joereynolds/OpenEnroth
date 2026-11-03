@@ -6,6 +6,10 @@
 #include <utility>
 #include <memory>
 
+#include "CoopJoinState.h"
+#include "CoopLobbyState.h"
+#include "CoopMenuState.h"
+#include "CoopPartyState.h"
 #include "CreditsState.h"
 #include "LoadSlotState.h"
 #include "LoadStep2State.h"
@@ -46,6 +50,8 @@ void GameFsmBuilder::_buildMainMenu(FsmBuilder &builder) {
     builder
     .state<MainMenuState>("MainMenu")
         .on("newGame").exitFsm()
+        .on("coopJoin").jumpTo("CoopJoin")
+        .on("coopMenu").jumpTo("CoopMenu")
         .on("loadGame").jumpTo("LoadSlot")
         .on("quickLoadGame").exitFsm()
         .on("credits").jumpTo("Credits")
@@ -56,5 +62,21 @@ void GameFsmBuilder::_buildMainMenu(FsmBuilder &builder) {
         .on("back").jumpTo("MainMenu")
 
     .state<CreditsState>("Credits")
+        .on("back").jumpTo("MainMenu")
+    .state<CoopMenuState>("CoopMenu")
+        .on("newGame").exitFsm()
+        .on("loadGame").jumpTo("LoadSlot")
+        .on("back").jumpTo("MainMenu")
+    .state<CoopJoinState>("CoopJoin")
+        .on("chooseParty").jumpTo("CoopParty")
+        .on("lobby").jumpTo("CoopLobby")
+        .on("failed").jumpTo("MainMenu")
+    .state<CoopPartyState>("CoopParty")
+        .on("newParty").exitFsm()
+        .on("lobby").jumpTo("CoopLobby")
+        .on("back").jumpTo("MainMenu")
+    .state<CoopLobbyState>("CoopLobby")
+        .on("joined").exitFsm()
+        .on("startGame").exitFsm()
         .on("back").jumpTo("MainMenu");
 }

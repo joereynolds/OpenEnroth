@@ -199,6 +199,7 @@ void OutdoorLocation::ExecDraw(unsigned int bRedraw) {
     uNumBillboardsToDraw = 0;
 
     PrepareActorsDrawList();
+    PrepareRemotePartiesDrawList();
 
     if (!pODMRenderParams->bDoNotRenderDecorations)
         render->PrepareDecorationsRenderList_ODM();
@@ -675,8 +676,8 @@ void OutdoorLocation::PrepareActorsDrawList() {
 
     for (int i = 0; i < pActors.size(); ++i) {
         pActors[i].attributes &= ~ACTOR_VISIBLE;
-        if (pActors[i].aiState == Removed || pActors[i].aiState == Disabled) {
-            continue;
+        if (pActors[i].aiState == Removed || pActors[i].aiState == Disabled || (pActors[i].attributes & ACTOR_COOP_STAND_IN)) {
+            continue; // Other co-op parties are drawn by PrepareRemotePartiesDrawList.
         }
 
         if (uNumBillboardsToDraw >= 500) return;
@@ -768,6 +769,40 @@ void OutdoorLocation::PrepareActorsDrawList() {
             // TODO(pskelton): drop tint color anyway?
             pBillboardRenderList[uNumBillboardsToDraw - 1].sTintColor = pMonsterList->monsters[pActors[i].monsterInfo.id].tintColor;
         }
+    }
+}
+
+void OutdoorLocation::PrepareRemotePartiesDrawList() {
+    const MonsterDesc &look = pMonsterList->monsters[MONSTER_FIGHTER_CHAIN_C];
+
+    for (const RemoteParty &party : engine->_remoteParties) {
+        if (uNumBillboardsToDraw >= 500)
+            return;
+
+        int sectorId = 0;
+        if (uCurrentlyLoadedLevelType == LEVEL_INDOOR) {
+            sectorId = pIndoor->GetSector(party.pos);
+            bool visible = false;
+            for (unsigned i = 0; i < pBspRenderer->uNumVisibleNotEmptySectors; i++)
+                if (pBspRenderer->pVisibleSectorIDs_toDrawDecorsActorsEtcFrom[i] == sectorId)
+                    visible = true;
+            if (!visible)
+                continue;
+        } else if (!IsCylinderInFrustum(party.pos, look.monsterRadius)) {
+            continue;
+        }
+
+        int angleToCamera = TrigLUT.atan2(party.pos.x - pCamera3D->vCameraPos.x, party.pos.y - pCamera3D->vCameraPos.y);
+        int octant = ((TrigLUT.uIntegerPi + (TrigLUT.uIntegerPi >> 3) + party.yaw - angleToCamera) >> 8) & 7;
+
+        ActorAnimation animation = party.walking ? ANIM_Walking : ANIM_Standing;
+        SpriteFrame *frame = pSpriteFrameTable->GetFrame(pSpriteFrameTable->FastFindSprite(look.spriteNames[animation]), gameTimer->time());
+        if (frame->spriteName == "null")
+            continue;
+
+        BillboardFlags flags = billboardFlagsForSprite(frame->flags, octant);
+        if (render->AddBillboardIfVisible(frame->sprites[octant], frame->paletteId, party.pos, {frame->scale, frame->scale}, flags, Pid(), sectorId))
+            ++uNumSpritesDrawnThisFrame;
     }
 }
 
@@ -865,7 +900,8 @@ void ODM_UpdateUserInputAndOther() {
         }
     }
 
-    UpdateActors_ODM();
+    if (!engine->_actorsFollowHost)
+        UpdateActors_ODM();
 }
 //----- (0041F54A) --------------------------------------------------------
 void OutdoorLocation::LoadActualSkyFrame() {

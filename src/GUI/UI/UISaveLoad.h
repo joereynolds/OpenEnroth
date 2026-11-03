@@ -107,6 +107,12 @@ class GUIWindow_Load : public GUIWindow_SaveLoad {
 };
 
 /**
+ * @return                          Slots to show in the load menu - all saves from the saves folder, sorted by
+ *                                  display name with file name as a tie-breaker.
+ */
+std::vector<SavegameSlot> loadMenuSlots();
+
+/**
  * @return                      Currently open save/load menu. Should only be called when one is open.
  */
 GUIWindow_SaveLoad *saveLoadMenu();

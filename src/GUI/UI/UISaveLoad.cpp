@@ -41,11 +41,7 @@ GraphicsImage *saveload_ui_x_d = nullptr;
 
 static GraphicsImage *scrollstop = nullptr;
 
-/**
- * @return                          Slots to show in the load menu - all saves from the saves folder, sorted by
- *                                  display name with file name as a tie-breaker.
- */
-static std::vector<SavegameSlot> loadMenuSlots() {
+std::vector<SavegameSlot> loadMenuSlots() {
     std::vector<SavegameSlot> result;
 
     if (!ufs->exists("saves"))

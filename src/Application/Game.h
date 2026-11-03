@@ -3,6 +3,8 @@
 #include <memory>
 #include <string_view>
 
+#include "Application/Startup/GameStarterOptions.h"
+
 #include "Io/KeyboardInputHandler.h"
 #include "Io/Mouse.h"
 
@@ -16,7 +18,7 @@ class Menu;
 
 class Game {
  public:
-    Game(PlatformApplication *application, std::shared_ptr<GameConfig> config);
+    Game(PlatformApplication *application, std::shared_ptr<GameConfig> config, CoopOptions coopOptions);
     ~Game();
 
     int run();
@@ -28,12 +30,15 @@ class Game {
     void closeTargetedSpellWindow();
     void onEscape();
     void onPressSpace();
+    void showCoopVote();
 
  private:
     PlatformApplication *_application = nullptr;
     std::shared_ptr<GameConfig> _config;
     std::unique_ptr<Menu> _menu;
     DecalBuilder *_decalBuilder = nullptr;
+    CoopOptions _coopOptions;
+    std::string_view _nextFsmState = "MainMenu"; // Where the menus pick up once `loop` returns to them.
 };
 
 extern std::unique_ptr<GraphicsImage> gamma_preview_image;  // 506E40

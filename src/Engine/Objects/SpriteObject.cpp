@@ -110,6 +110,11 @@ int SpriteObject::Create(int yaw, int pitch, int speed, int which_char) {
         pSpriteObjects.resize(sprite_slot + 1);
     }
     pSpriteObjects[sprite_slot] = *this;
+
+    bool isFragment = spriteId == SPRITE_SPELL_WATER_ICE_BLAST_FALLOUT || spriteId == SPRITE_SPELL_EARTH_DEATH_BLOSSOM_FALLOUT; // Every game breaks a blast up itself.
+    bool isShared = spell_caster_pid.type() == OBJECT_Character || (spell_caster_pid.type() == OBJECT_Actor && !engine->_actorsFollowHost);
+    if (engine->_coopSessionActive && isShared && !isCoopRemote && !isFragment)
+        engine->_launchedSprites.push_back(pSpriteObjects[sprite_slot]);
     return sprite_slot;
 }
 
@@ -256,6 +261,8 @@ void SpriteObject::updateObjectODM(unsigned int uLayingItemID) {
             // TODO(captainurist): projectiles can fly right through small actors - an ice bolt aimed at a peasant
             //                     ~250 units away missed it and hit a titan further along the flight path.
             for (int j = 0; j < pActors.size(); ++j) {
+                if (casterType == OBJECT_Character && (pActors[j].attributes & ACTOR_COOP_STAND_IN))
+                    continue; // Another co-op player's party, flown through like the caster's own.
                 CollideWithActor(j, 0);
             }
         }
@@ -394,6 +401,9 @@ LABEL_25:
                 }
 
                 for (int actloop = 0; actloop < (signed int)pActors.size(); ++actloop) {
+                    if (pSpriteObject->spell_caster_pid.type() == OBJECT_Character && (pActors[actloop].attributes & ACTOR_COOP_STAND_IN))
+                        continue; // Another co-op player's party, flown through like the caster's own.
+
                     // dont collide against self monster type
                     if (pSpriteObject->spell_caster_pid.type() == OBJECT_Actor) {
                         if (pActors[pSpriteObject->spell_caster_pid.id()].monsterInfo.id == pActors[actloop].monsterInfo.id) {
@@ -968,6 +978,10 @@ bool processSpellImpact(unsigned int uLayingItemID, Pid pid) {
             //     default:
             //         break;
             // }
+            if (object->isCoopRemote) {
+                SpriteObject::Remove(uLayingItemID); // The caster's game sends whether the effect landed.
+                return 0;
+            }
             bool isDamaged = false;
             bool isShrinkingRayAoe = (object->spriteId == SPRITE_SPELL_DARK_SHRINKING_RAY) && (object->spell_skill == MASTERY_GRANDMASTER);
             if (pid.type() != OBJECT_Actor) {
@@ -1091,6 +1105,9 @@ bool processSpellImpact(unsigned int uLayingItemID, Pid pid) {
 }
 
 void applySpellSpriteDamage(unsigned int uLayingItemID, Pid pid) {
+    if (pSpriteObjects[uLayingItemID].isCoopRemote)
+        return;
+
     if (pid.type() == OBJECT_Character) {
         DamageCharacterFromMonster(Pid(OBJECT_Sprite, uLayingItemID), pSpriteObjects[uLayingItemID].spellCasterAbility, -1);
     } else if (pid.type() == OBJECT_Actor) {

@@ -43,6 +43,8 @@ void ItemInteraction(int item_id) {
             pParty->setHoldingItem(pSpriteObjects[item_id].containing_item);
         }
     }
+    if (engine->_coopSessionActive) // The other co-op players' copies of the item disappear too.
+        engine->_takenGroundItems.push_back(GroundItemTaken{pSpriteObjects[item_id].containing_item.itemId, pSpriteObjects[item_id].vPosition});
     SpriteObject::Remove(item_id);
 }
 

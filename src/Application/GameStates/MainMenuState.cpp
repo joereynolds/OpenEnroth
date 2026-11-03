@@ -1,5 +1,7 @@
 #include "MainMenuState.h"
 
+#include "CoopJoinState.h"
+
 #include <Media/Audio/AudioPlayer.h>
 #include <Engine/Engine.h>
 #include <Engine/SaveLoad.h>
@@ -33,6 +35,9 @@ FsmAction MainMenuState::enter() {
 }
 
 FsmAction MainMenuState::update() {
+    if (CoopJoinState::isJoinPending())
+        return FsmAction::transition("coopJoin");
+
     std::string_view transition;
     while (engine->_messageQueue->haveMessages()) {
         UIMessageType messageType;
@@ -48,6 +53,9 @@ FsmAction MainMenuState::update() {
         case UIMSG_MainMenu_ShowLoadWindow:
             SetCurrentMenuID(MENU_SAVELOAD);
             transition = "loadGame";
+            break;
+        case UIMSG_MainMenu_ShowCoopMenu:
+            transition = "coopMenu";
             break;
         case UIMSG_ShowCredits:
             SetCurrentMenuID(MENU_CREDITS);

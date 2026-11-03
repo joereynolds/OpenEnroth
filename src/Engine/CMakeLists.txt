@@ -29,6 +29,7 @@ set(ENGINE_HEADERS
         AssetsManager.h
         AttackList.h
         Conditions.h
+        CoopEvents.h
         Engine.h
         EngineCallObserver.h
         EngineEnums.h
@@ -95,6 +96,7 @@ target_compile_definitions(engine PRIVATE
 
 add_subdirectory(Data)
 add_subdirectory(Components)
+add_subdirectory(Coop)
 add_subdirectory(Evt)
 add_subdirectory(Graphics)
 add_subdirectory(Objects)

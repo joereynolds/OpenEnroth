@@ -112,6 +112,7 @@ enum class ActorAttribute : uint32_t {
     ACTOR_UNKNOW9 = 0x00400000,  // actor has job - never finished feature
     ACTOR_HAS_ITEM = 0x00800000,
     ACTOR_HOSTILE = 0x01000000,
+    ACTOR_COOP_STAND_IN = 0x02000000, // OE addition, stands in for another co-op player's party on the host's map.
 };
 using enum ActorAttribute;
 MM_DECLARE_FLAGS(ActorAttributes, ActorAttribute)

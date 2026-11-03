@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include "Engine/Evt/EvtContinuation.h"
 #include "Engine/MapEnums.h"
@@ -52,4 +53,24 @@ class GUIWindow_IndoorEntryExit : public GUIWindow_Transition {
  private:
     MapDestination _destination;
     EvtContinuation _continuation;
+};
+
+/**
+ * Asks the local player whether to agree to something another co-op player proposed, like a trip or a rest.
+ */
+class GUIWindow_CoopVote : public GUIWindow_Transition {
+ public:
+    /**
+     * @param title                     Short heading, e.g. the destination's name.
+     * @param question                  What the other player proposes, put as a question.
+     * @param acceptHint                Hint for the button that agrees.
+     */
+    GUIWindow_CoopVote(std::string title, std::string question, std::string acceptHint);
+    virtual ~GUIWindow_CoopVote() {}
+
+    virtual void Update() override;
+
+ private:
+    std::string _title;
+    std::string _question;
 };

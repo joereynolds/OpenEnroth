@@ -1319,7 +1319,7 @@ void snapshot(const Actor &src, Actor_MM7 *dst) {
     snapshot(src.GetDisplayName(), &dst->name);
 
     dst->npcId = src.npcId;
-    dst->attributes = std::to_underlying(src.attributes);
+    dst->attributes = std::to_underlying(src.attributes & ~ACTOR_COOP_STAND_IN);
     dst->hp = src.hp;
 
     dst->monsterInfo.level = src.monsterInfo.level;
@@ -1389,7 +1389,7 @@ void snapshot(const Actor &src, Actor_MM7 *dst) {
     snapshot(src.initialPosition, &dst->initialPosition);
     snapshot(src.guardingPosition, &dst->guardingPosition);
     dst->tetherDistance = src.tetherDistance;
-    dst->aiState = std::to_underlying(src.aiState);
+    dst->aiState = std::to_underlying((src.attributes & ACTOR_COOP_STAND_IN) ? Removed : src.aiState); // Stand-ins are recreated while in co-op.
     dst->currentActionAnimation = std::to_underlying(src.currentActionAnimation);
     dst->carriedItemId = std::to_underlying(src.carriedItemId);
     dst->currentActionTime = src.currentActionTime.ticks();
@@ -1602,6 +1602,8 @@ void reconstruct(const SpawnPoint_MM7 &src, SpawnPoint *dst) {
 
 void snapshot(const SpriteObject &src, SpriteObject_MM7 *dst) {
     memzero(dst);
+    if (src.isCoopRemote)
+        return; // Another co-op player's projectile is only a picture, saves get an empty slot.
 
     dst->spriteId = std::to_underlying(src.spriteId);
     dst->objectDescId = src.uObjectDescID;

@@ -61,6 +61,15 @@ void autoSave();
 void doSavegame(std::string fileName, std::string_view title);
 void saveNewGame();
 
+/**
+ * Saves the freshly created party as a new game of its own, into the first free `saveNNN.mm7`. Doesn't touch the
+ * autosave, and doesn't load anything.
+ *
+ * @param title                     Save title to display in the save list in-game.
+ * @return                          File name of the save, e.g. "save003.mm7".
+ */
+std::string saveNewParty(std::string_view title);
+
 void quickSaveGame();
 void quickLoadGame();
 std::string getCurrentQuickSave();

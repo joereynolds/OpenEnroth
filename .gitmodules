@@ -69,3 +69,6 @@
 [submodule "thirdparty/cpptrace"]
 	path = thirdparty/cpptrace
 	url = https://github.com/jeremy-rifkin/cpptrace.git
+[submodule "thirdparty/enet"]
+	path = thirdparty/enet
+	url = https://github.com/lsalzman/enet.git

@@ -4,6 +4,8 @@
 
 #include "EngineGlobals.h"
 
+static constexpr Duration MAX_KEPT_RUNNING_DT = Duration::fromRealtimeMilliseconds(250);
+
 Timer *animTimer = new Timer;
 Timer *gameTimer;
 
@@ -23,8 +25,10 @@ void Timer::tick() {
 
     _dt = newTime - _lastFrameTime;
     _lastFrameTime = newTime;
+    if (_keepsRunning)
+        _dt = std::min(_dt, MAX_KEPT_RUNNING_DT); // Blocking work between frames, like saving, mustn't land on the world in one step.
 
-    if (!_paused && !_turnBased)
+    if (!isPaused() && !_turnBased)
         _time += _dt;
 }
 
@@ -37,6 +41,14 @@ void Timer::setPaused(bool paused) {
     if (!_paused) {
         _lastFrameTime = platformTime();
     }
+}
+
+void Timer::setKeepsRunning(bool keepsRunning) {
+    if (_keepsRunning == keepsRunning)
+        return;
+
+    _keepsRunning = keepsRunning;
+    _lastFrameTime = platformTime();
 }
 
 void Timer::setTurnBased(bool turnBased) {

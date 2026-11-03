@@ -15,6 +15,7 @@
 
 #include "GUI/GUIWindow.h"
 #include "GUI/GUIMessageQueue.h"
+#include "GUI/UI/UIStatusBar.h"
 
 #include "InputEnumFunctions.h"
 #include "Mouse.h"
@@ -227,6 +228,8 @@ void Io::KeyboardInputHandler::ProcessGameplayAction(InputAction action) {
                     pParty->bTurnBasedModeOn = false;
                     pTurnEngine->End(true);
                 }
+            } else if (engine->_coopSessionActive) {
+                engine->_statusBar->setEvent("Turn-based mode isn't available in co-op"); // The other players' games wouldn't take turns.
             } else {
                 pTurnEngine->Start();
                 pParty->bTurnBasedModeOn = true;

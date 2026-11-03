@@ -13,10 +13,22 @@ class Timer {
     void tick();
 
     bool isPaused() const {
-        return _paused;
+        return _paused && !_keepsRunning;
     }
 
     void setPaused(bool paused);
+
+    /**
+     * Makes the timer ignore pauses, e.g. because other players' games depend on this one's world. Pauses asked for
+     * meanwhile take effect again once this is switched off.
+     *
+     * @param keepsRunning              Whether the timer should keep running through pauses.
+     */
+    void setKeepsRunning(bool keepsRunning);
+
+    bool keepsRunning() const {
+        return _keepsRunning;
+    }
 
     // TODO(captainurist): isTurnBased is just a synonym for 'really-totally-paused'. Doesn't belong here, move out.
 
@@ -42,6 +54,7 @@ class Timer {
 
  private:
     bool _paused = false;
+    bool _keepsRunning = false;
     bool _turnBased = false;
     Duration _lastFrameTime; // "Realtime" tick count, as Duration, at the last frame.
     Duration _dt; // dt since last frame.
