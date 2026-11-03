@@ -1958,3 +1958,77 @@ GAME_TEST(Coop, GuestSpellsReachHost) {
     EXPECT_EQ(launched[0].sprite.spriteId, SPRITE_SPELL_FIRE_FIRE_BOLT);
     EXPECT_EQ(launched[0].sprite.spell_caster_pid, Pid::character(0));
 }
+
+GAME_TEST(Coop, HostMonsterProjectilesReachGuests) {
+    // An archer in the host's game shooting at a guest sends its arrows to the guests, so that they see them fly.
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    prepareForBattleTest();
+    engine->config->debug.NoActors.setValue(false);
+    Vec3f guestPos(2386, 9696, 960); // In front of the fire guild's door, far from the host at the bridge.
+    int archer = game.spawnMonster(guestPos + Vec3f(0, 1000, 0), MONSTER_ARCHER_A, SPAWN_STATIONARY)->id;
+    coopSession = CoopSession::host(0, 4);
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    CoopClient guest("127.0.0.1", coopSession->server()->port(), "Guest");
+    for (int i = 0; i < 100 && guest.state() == COOP_CLIENT_CONNECTING; i++) { // Loopback, but ENet's handshake takes a few round trips.
+        game.tick();
+        guest.update();
+    }
+    ASSERT_EQ(guest.state(), COOP_CLIENT_JOINED);
+    test.startTaping();
+
+    auto fromArcher = [&](const CoopSpriteLaunched &launched) { return launched.sprite.spell_caster_pid == Pid(OBJECT_Actor, archer); };
+    std::vector<CoopSpriteLaunched> launched;
+    for (int i = 0; i < 300 && !std::ranges::any_of(launched, fromArcher); i++) { // The archer spots the guest, aims and shoots.
+        guest.sendLocalPose(CoopPartyPose{.map = MAP_EMERALD_ISLAND, .pos = guestPos});
+        guest.update();
+        game.tick();
+        for (const CoopSpriteLaunched &sprite : guest.takeSpritesLaunched())
+            launched.push_back(sprite);
+    }
+
+    auto arrow = std::ranges::find_if(launched, fromArcher);
+    ASSERT_NE(arrow, launched.end());
+    EXPECT_EQ(arrow->map, MAP_EMERALD_ISLAND);
+    EXPECT_EQ(arrow->sprite.spriteId, SPRITE_PROJECTILE_ARROW);
+}
+
+GAME_TEST(Coop, GuestDrawsHostMonsterProjectiles) {
+    // An arrow a monster shot in the host's game flies at a guest's party, but only the host's word hurts the party.
+    auto hpTape = tapes.totalHp();
+    auto spritesTape = tapes.sprites();
+    engine->config->debug.NoActors.setValue(true);
+    game.startNewGame();
+    Blob hostSave = createSaveData(false, "Host").second;
+    CoopServer server(0, 4, [&] { return Blob::share(hostSave); });
+    game.goToMainMenu();
+    coopSession = CoopSession::join("127.0.0.1", server.port(), "Guest", Blob());
+    MM_AT_SCOPE_EXIT(coopSession.reset());
+    for (int i = 0; i < 100 && server.remoteParties().empty(); i++) { // Loopback, but ENet's handshake takes a few round trips.
+        server.update();
+        game.tick();
+    }
+    ASSERT_EQ(server.remoteParties().size(), 1);
+    engine->config->debug.NoActors.setValue(false);
+    Actor *archer = game.spawnMonster(pParty->pos + Vec3f(0, 1000, 0), MONSTER_ARCHER_A, SPAWN_DUMMY);
+    test.startTaping();
+
+    CoopSpriteLaunched launched;
+    launched.map = MAP_EMERALD_ISLAND;
+    launched.sprite.spriteId = SPRITE_PROJECTILE_ARROW;
+    launched.sprite.spell_caster_pid = Pid(OBJECT_Actor, archer->id);
+    launched.sprite.spellCasterAbility = ABILITY_ATTACK1;
+    launched.sprite.vPosition = archer->pos + Vec3f(0, 0, archer->height / 2);
+    launched.sprite.vVelocity = Vec3f(0, -1000, 0);
+    launched.sprite.uFacing = 1536;
+    server.sendSpriteLaunched(launched);
+    bool arrived = false;
+    for (int i = 0; i < 100 && !(arrived && !hasSprite(SPRITE_PROJECTILE_ARROW)); i++) { // The arrow flies until it hits the party.
+        server.update();
+        game.tick();
+        arrived |= hasSprite(SPRITE_PROJECTILE_ARROW);
+    }
+
+    EXPECT_CONTAINS(spritesTape.flatten(), SPRITE_PROJECTILE_ARROW);
+    EXPECT_EQ(hpTape.size(), 1);
+}

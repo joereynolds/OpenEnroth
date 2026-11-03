@@ -130,7 +130,7 @@ There are three ways something gets shared:
 | Chests | Relayed | `CoopChest`, the whole chest, whenever someone changes it. |
 | Ground item pickups | Relayed | `CoopGroundItemTaken`. Matched by item kind and nearest position, since indices differ between games. |
 | Dropped items | Relayed | `CoopItemDropped`. Every game makes the same throw with `Party::dropItem`. |
-| Spells and arrows | Relayed | `CoopSpriteLaunched`, every sprite a party launches, see below. |
+| Spells and arrows | Relayed | `CoopSpriteLaunched`, every sprite a party or the host's monsters launch, see below. |
 | Map changes | Voted | `COOP_VOTE_TRAVEL`. Every map change ends up in the game loop's `GAME_STATE_CHANGE_LOCATION` branch, and that's where it's turned into a vote. |
 | Rest | Voted | `COOP_VOTE_REST`. Once approved, every game opens the rest window and rests normally. |
 | Game time | Host-driven | `CoopClock`, every 30 game seconds. A guest more than a game minute off follows it, see `syncClock`. |
@@ -164,12 +164,14 @@ the host keeps a hidden actor for every guest's party on its map, marked with `A
 ### Spells and arrows
 
 `SpriteObject::Create` records every sprite whose caster is one of the local party's characters in
-`Engine::_launchedSprites`. That covers bolts, arrows, and the stationary sprites of spells like Immolation. Ice Blast
-and Death Blossom fragments are left out, because every game breaks the blast up on its own.
+`Engine::_launchedSprites`. That covers bolts, arrows, and the stationary sprites of spells like Immolation. The host
+also records the sprites its monsters launch, guests don't run monster AI and never launch any. Ice Blast and Death
+Blossom fragments are left out, because every game breaks the blast up on its own.
 
-Other games create the sprite with `SpriteObject::isCoopRemote` set. It flies, collides and explodes like any other, but its
-impact deals no damage, sets no spell effects and pushes no area attack. What it did reaches the other games the usual
-way, as a guest's `CoopActorDamage` and `CoopActorBuff`, or in the host's monster states. Saves leave these sprites out.
+Other games create the sprite with `SpriteObject::isCoopRemote` set. It flies, collides and explodes like any other,
+but its impact deals no damage, sets no spell effects and pushes no area attack. What it did reaches the other games
+the usual way, as a guest's `CoopActorDamage` and `CoopActorBuff`, in the host's monster states, or as a `CoopPartyHit`
+for a monster's hit on a guest. Saves leave these sprites out.
 
 ### Votes
 
@@ -239,7 +241,6 @@ Things that will bite you when writing tests:
   host's clock within a second.
 * **Spell effect strength:** guests learn which spell effects the host's monsters are under and how much a shrink
   shrinks them, but not the strength of other effects. None of the others change how a monster is drawn.
-* **Monster projectiles** only fly in the host's game. Guests skip monster AI, and that's what launches them.
 * **Chests and ground items** are relayed rather than host-driven, so two players grabbing the same item within one
   round trip can both get it.
 * **Quest rewards** are applied to the same character slots, whoever is in them.

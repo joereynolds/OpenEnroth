@@ -112,7 +112,8 @@ int SpriteObject::Create(int yaw, int pitch, int speed, int which_char) {
     pSpriteObjects[sprite_slot] = *this;
 
     bool isFragment = spriteId == SPRITE_SPELL_WATER_ICE_BLAST_FALLOUT || spriteId == SPRITE_SPELL_EARTH_DEATH_BLOSSOM_FALLOUT; // Every game breaks a blast up itself.
-    if (engine->_coopSessionActive && spell_caster_pid.type() == OBJECT_Character && !isCoopRemote && !isFragment)
+    bool isShared = spell_caster_pid.type() == OBJECT_Character || (spell_caster_pid.type() == OBJECT_Actor && !engine->_actorsFollowHost);
+    if (engine->_coopSessionActive && isShared && !isCoopRemote && !isFragment)
         engine->_launchedSprites.push_back(pSpriteObjects[sprite_slot]);
     return sprite_slot;
 }

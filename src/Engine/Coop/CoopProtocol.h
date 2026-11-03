@@ -203,7 +203,10 @@ struct CoopItemDropped {
     int yaw = 0;
 };
 
-/** A projectile or spell effect one player's party launched. Relayed like `CoopQuestBit`, other games only draw it. */
+/**
+ * A projectile or spell effect that one player's party, or a monster in the host's game, launched. Relayed like
+ * `CoopQuestBit`, other games only draw it.
+ */
 struct CoopSpriteLaunched {
     int playerId = -1; // Filled in by the host, clients leave it at -1.
     MapId map = MAP_INVALID;
